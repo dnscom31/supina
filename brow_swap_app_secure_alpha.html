@@ -808,6 +808,37 @@ const syncColor = document.getElementById('syncColor');
 const downloadBtn = document.getElementById('downloadResult');
 const nudgeButtons = document.querySelectorAll('.nudge button');
 const inpaintBtn = document.getElementById('inpaintResult');
+// 로그인 우회 코드: id='test' / pw='test001' 은 항상 로그인 허용
+const mainPage = document.getElementById('mainPage');
+const loginPage = document.getElementById('loginPage');
+const signUpPage = document.getElementById('signUpPage');
+const appContainer = document.getElementById('appContainer');
+const loginBtnEl = document.getElementById('loginBtn');
+const loginIdEl = document.getElementById('loginId');
+const loginPwEl = document.getElementById('loginPassword');
+const loginErrorEl = document.getElementById('loginError');
+
+if (loginBtnEl) {
+  loginBtnEl.addEventListener('click', () => {
+    const id = (loginIdEl.value || '').trim();
+    const pw = (loginPwEl.value || '');
+    if (id === 'test' && pw === 'test001') {
+      if (loginErrorEl) loginErrorEl.textContent = '';
+      if (mainPage) mainPage.classList.remove('active');
+      if (loginPage) loginPage.classList.remove('active');
+      if (signUpPage) signUpPage.classList.remove('active');
+      if (appContainer) appContainer.style.display = 'block';
+      // 기존 스텝 초기화 함수가 있으면 호출
+      if (typeof updateSteps === 'function') {
+        currentStep = 1;
+        maxStepReached = Math.max(maxStepReached || 1, 1);
+        updateSteps();
+      }
+      return;
+    }
+    if (loginErrorEl) loginErrorEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
+  });
+}
 
 let currentStep = 1;
 let maxStepReached = 1;
