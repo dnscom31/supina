@@ -1,0 +1,283 @@
+// 2단계: 눈썹 영역 페인팅/확인 (줌/이동, 고정 그리드, 자동선택 제거)
+(function(){
+  // 뷰 상태
+  var zoom = 1.0, minZoom = 1.0, maxZoom = 4.0;
+  var panX = 0, panY = 0;
+  var isPanning = false;
+  var paintActive = false; // paintingSide가 있을 때만 true
+  var lastScreen = {x:0,y:0};
+  var maskRaw; // 원본 해상도의 마스크 버퍼(canvas)
+  var mrawCtx;
+
+  function screenToImage(x, y){
+    // 캔버스 내부 좌표계(픽셀) → 이미지 좌표
+    // getCanvasPos로 받은 좌표를 기준으로 변환
+    return {
+      x: (x - panX) / zoom,
+      y: (y - panY) / zoom
+    };
+  }
+
+  function ensureMaskRaw(){
+    if (!faceW || !faceH) return;
+    if (!maskRaw){
+      maskRaw = document.createElement('canvas');
+      maskRaw.width = faceW; maskRaw.height = faceH;
+      mrawCtx = maskRaw.getContext('2d');
+      mrawCtx.lineCap='round'; mrawCtx.lineJoin='round';
+    }
+  }
+
+  function computeBBoxFromMaskRaw(){
+    if (!maskRaw) return null;
+    var imgData = mrawCtx.getImageData(0,0,maskRaw.width, maskRaw.height).data;
+    var minX=maskRaw.width, minY=maskRaw.height, maxX=0, maxY=0, found=false;
+    for (var y=0;y<maskRaw.height;y++){
+      for (var x=0;x<maskRaw.width;x++){
+        var a = imgData[(y*maskRaw.width + x)*4 + 3];
+        if (a>0){ found=true; if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+      }
+    }
+    if (!found) return null; return {minX, minY, maxX, maxY, w:maxX-minX+1, h:maxY-minY+1};
+  }
+
+  function renderStep2(){
+    if (!faceCanvas || !faceCtx) return;
+    if (!faceImage || !faceCanvas || !faceMaskCanvas) return;
+    // 이미지
+    faceCtx.save();
+    faceCtx.setTransform(1,0,0,1,0,0);
+    faceCtx.clearRect(0,0,faceCanvas.width, faceCanvas.height);
+    faceCtx.setTransform(zoom, 0, 0, zoom, panX, panY);
+    faceCtx.drawImage(faceBaseCanvas||faceImage, 0, 0, faceW, faceH);
+    faceCtx.restore();
+
+    // 마스크 오버레이
+    faceMaskCtx.save();
+    faceMaskCtx.setTransform(1,0,0,1,0,0);
+    faceMaskCtx.clearRect(0,0,faceMaskCanvas.width, faceMaskCanvas.height);
+    faceMaskCtx.setTransform(zoom, 0, 0, zoom, panX, panY);
+    if (maskRaw && !selectionLocked.left && !selectionLocked.right) faceMaskCtx.drawImage(maskRaw, 0, 0);
+    // 선택된 영역 점선 표시
+    faceMaskCtx.setTransform(zoom,0,0,zoom,panX,panY);
+    faceMaskCtx.save(); faceMaskCtx.setLineDash([8,6]); faceMaskCtx.lineWidth=2; faceMaskCtx.strokeStyle='rgba(255,255,255,.9)';
+    ['left','right'].forEach(function(side){
+      if (!selectionLocked[side]) return; var reg = faceRegions[side]; if(!reg||!reg.bbox) return;
+      var [x,y,w,h] = reg.bbox; faceMaskCtx.strokeRect(x, y, w, h);
+    }); faceMaskCtx.restore();
+    faceMaskCtx.restore();
+  }
+
+  function updateNextFromStep2(){ if (nextFromStep2){ nextFromStep2.style.display = (selectionLocked.left && selectionLocked.right)? 'block':'none'; } }
+
+  function clampPan(){
+    // 이미지 경계 기반 팬 제한: 이미지 화면폭/높이와 캔버스 비교
+    if (!faceCanvas) return;
+    var viewW = faceCanvas.width, viewH = faceCanvas.height;
+    var imgW = (faceW||0) * zoom, imgH = (faceH||0) * zoom;
+
+    // X축
+    if (imgW >= viewW){
+      var minX = viewW - imgW; // 오른쪽 끝까지
+      var maxX = 0;            // 왼쪽 끝까지
+      if (panX < minX) panX = minX;
+      if (panX > maxX) panX = maxX;
+    } else {
+      // 이미지가 화면보다 작으면 가운데 고정
+      panX = (viewW - imgW)/2;
+    }
+
+    // Y축
+    if (imgH >= viewH){
+      var minY = viewH - imgH;
+      var maxY = 0;
+      if (panY < minY) panY = minY;
+      if (panY > maxY) panY = maxY;
+    } else {
+      panY = (viewH - imgH)/2;
+    }
+  }
+
+  function zoomAt(factor, center){
+    var newZoom = Math.min(maxZoom, Math.max(minZoom, zoom * factor));
+    // 중심 고정 줌
+    var cx = center.x, cy = center.y;
+    panX = cx - (newZoom/zoom) * (cx - panX);
+    panY = cy - (newZoom/zoom) * (cy - panY);
+    zoom = newZoom;
+    clampPan(); renderStep2();
+  }
+
+  function reapplyLiquify(){
+    if (!faceBaseOriginalCanvas || !faceBaseCanvas) return;
+    faceBaseCtx.setTransform(1,0,0,1,0,0);
+    faceBaseCtx.clearRect(0,0,faceW,faceH);
+    faceBaseCtx.drawImage(faceBaseOriginalCanvas, 0, 0);
+    var feather = liquifyFeather? parseInt(liquifyFeather.value) : 0;
+    var sat = liquifySaturation? parseInt(liquifySaturation.value) : 100;
+    var opa = liquifyOpacity? (parseInt(liquifyOpacity.value)/100) : 1;
+    ['left','right'].forEach(function(side){
+      var reg = faceRegions[side]; var mask = faceMasks[side]; if(!reg||!mask) return;
+      var minX=reg.bbox[0], minY=reg.bbox[1], boxW=reg.bbox[2], boxH=reg.bbox[3];
+      var patch = document.createElement('canvas'); patch.width=boxW; patch.height=boxH; var pctx=patch.getContext('2d');
+      var filterParts=[]; if (feather>0) filterParts.push('blur('+feather+'px)'); filterParts.push('saturate('+(sat/100)+')');
+      pctx.filter = filterParts.join(' ');
+      pctx.drawImage(faceBaseOriginalCanvas, minX, minY, boxW, boxH, 0, 0, boxW, boxH);
+      var m = document.createElement('canvas'); m.width=boxW; m.height=boxH; var mctx=m.getContext('2d'); mctx.drawImage(mask.maskCanvas,0,0);
+      pctx.globalCompositeOperation = 'destination-in'; pctx.drawImage(m,0,0);
+      faceBaseCtx.save(); faceBaseCtx.globalAlpha = opa; faceBaseCtx.drawImage(patch, minX, minY); faceBaseCtx.restore();
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', function(){
+    selectDom();
+    if (!faceCanvas) return;
+
+    // 마우스 동작: paintingSide가 없으면 좌클릭/우클릭 = 이동, paintingSide 있으면 좌클릭 = 페인팅, 우클릭 = 이동
+    function onPointerDown(e){
+      if (!faceImage) return;
+      var isRight = (e.button===2);
+      var pos = getCanvasPos(faceMaskCanvas, e);
+      lastScreen = pos;
+      if (!paintingSide || isRight){
+        isPanning = true;
+      } else {
+        // 페인팅 시작
+        ensureMaskRaw();
+        paintActive = true;
+        var _bw = parseInt(brushSizeInput.value); _bw = isNaN(_bw)?15:Math.max(0, Math.min(100, _bw)); mrawCtx.lineWidth = _bw;
+        mrawCtx.strokeStyle = (paintingSide==='left'?'rgba(180,140,245,0.95)':'rgba(245,138,203,0.95)');
+        mrawCtx.beginPath();
+        // 좌표를 이미지 좌표로 변환해서 기록
+        var img = screenToImage(pos.x, pos.y);
+        mrawCtx.moveTo(img.x, img.y);
+      }
+    }
+    function onPointerMove(e){
+      if (!faceImage) return;
+      var pos = getCanvasPos(faceMaskCanvas, e);
+      if (isPanning){
+        var dx = pos.x - lastScreen.x;
+        var dy = pos.y - lastScreen.y;
+        panX += dx; panY += dy;
+        lastScreen = pos;
+        clampPan(); renderStep2();
+      } else if (paintActive){
+        var img = screenToImage(pos.x, pos.y);
+        mrawCtx.lineTo(img.x, img.y);
+        mrawCtx.stroke();
+        renderStep2();
+      }
+    }
+    function onPointerUp(){
+      if (isPanning){ isPanning=false; }
+      if (paintActive){
+        paintActive=false; mrawCtx.closePath();
+      }
+    }
+
+    // 컨텍스트 메뉴 차단(우클릭 드래그용)
+    faceMaskCanvas?.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+    faceMaskCanvas?.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
+    // 확대/축소 버튼
+    document.getElementById('zoomInStep2')?.addEventListener('click', function(){
+      var rect = faceMaskCanvas.getBoundingClientRect();
+      zoomAt(1.25, {x: rect.width/2 * (faceMaskCanvas.width/rect.width), y: rect.height/2 * (faceMaskCanvas.height/rect.height)});
+    });
+    document.getElementById('zoomOutStep2')?.addEventListener('click', function(){
+      var rect = faceMaskCanvas.getBoundingClientRect();
+      zoomAt(1/1.25, {x: rect.width/2 * (faceMaskCanvas.width/rect.width), y: rect.height/2 * (faceMaskCanvas.height/rect.height)});
+    });
+    document.getElementById('resetViewStep2')?.addEventListener('click', function(){
+      zoom = 1.0; panX = 0; panY = 0; renderStep2();
+    });
+
+    // 기존 버튼 동작: 왼쪽/오른쪽 칠하기 → paintingSide 설정/해제
+    paintLeftBtn?.addEventListener('click', function(){ if(!faceImage) return; paintingSide='left'; paintStatus.textContent='왼쪽 페인팅 모드 (좌클릭: 페인팅 / 우클릭: 이동)'; });
+    paintRightBtn?.addEventListener('click', function(){ if(!faceImage) return; paintingSide='right'; paintStatus.textContent='오른쪽 페인팅 모드 (좌클릭: 페인팅 / 우클릭: 이동)'; });
+
+    function clearFaceMask(){
+      if (!faceImage) return;
+      ensureMaskRaw();
+      mrawCtx.clearRect(0,0,maskRaw.width, maskRaw.height);
+      renderStep2();
+    }
+    clearMaskBtn?.addEventListener('click', clearFaceMask);
+    nextFromStep2?.addEventListener('click', function(){
+      if (selectionLocked.left && selectionLocked.right){
+        currentStep = 3; maxStepReached = Math.max(maxStepReached, 3); updateSteps();
+      } else {
+        alert('왼쪽과 오른쪽 영역을 모두 확정해주세요.');
+      }
+    });
+    finalizeStep2Btn?.addEventListener('click', function(){ currentStep=3; maxStepReached=Math.max(maxStepReached,3); updateSteps(); });
+    gotoStep4Btn?.addEventListener('click', function(){ currentStep=4; maxStepReached=Math.max(maxStepReached,4); updateSteps(); });
+    gotoStep5Btn?.addEventListener('click', function(){ currentStep=5; maxStepReached=Math.max(maxStepReached,5); updateSteps(); });
+    liquifyFeather?.addEventListener('input', function(){ reapplyLiquify(); renderStep2(); });
+    liquifySaturation?.addEventListener('input', function(){ reapplyLiquify(); renderStep2(); });
+    liquifyOpacity?.addEventListener('input', function(){ reapplyLiquify(); renderStep2(); });
+
+    function confirmFaceMask(){
+      if (!faceImage || !paintingSide){ alert('왼쪽/오른쪽 중 하나를 선택하세요.'); return; }
+      ensureMaskRaw();
+      // 마스크의 바운딩 박스 계산
+      var imgData = mrawCtx.getImageData(0,0,maskRaw.width, maskRaw.height);
+      var data = imgData.data;
+      var minX=maskRaw.width, minY=maskRaw.height, maxX=0, maxY=0, found=false;
+      for (var y=0;y<maskRaw.height;y++){
+        for (var x=0;x<maskRaw.width;x++){
+          var a = data[(y*maskRaw.width + x)*4 + 3];
+          if (a>0){ found=true; if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+        }
+      }
+      if (!found){ alert('영역을 칠해주세요.'); return; }
+      var boxW = maxX-minX+1, boxH = maxY-minY+1;
+      // 영역 캔버스 추출
+      var temp = document.createElement('canvas'); temp.width=boxW; temp.height=boxH;
+      var t = temp.getContext('2d'); t.drawImage((faceBaseOriginalCanvas||faceBaseCanvas||faceCanvas), minX, minY, boxW, boxH, 0, 0, boxW, boxH);
+      // 피부톤 채움 대신 유동화/채도/불투명도 파이프라인을 적용 (확인 후에도 재적용 가능)
+      reapplyLiquify();
+
+      // 마스크/캔버스 저장
+      var mCanvas = document.createElement('canvas'); mCanvas.width=boxW; mCanvas.height=boxH; mCanvas.getContext('2d').putImageData(maskSub,0,0);
+      t.globalCompositeOperation='destination-in'; t.drawImage(mCanvas,0,0); t.globalCompositeOperation='source-over';
+
+      faceRegions[paintingSide] = { canvas: temp, bbox:[minX,minY,boxW,boxH] };
+      faceMasks[paintingSide]   = { maskCanvas: mCanvas, bbox:[minX,minY] };
+
+      // 다음 준비
+      // 선택 완료 후에는 paintingSide 해제 → 드래그/이동 모드
+      paintingSide = null;
+      paintStatus.textContent = '';
+      // 두 눈썹 모두 완료 시 3단계로
+      if (faceRegions.left && faceRegions.right){
+        currentStep = 3; maxStepReached = Math.max(maxStepReached,3); updateSteps();
+      } else { updateNextFromStep2(); }
+      renderStep2();
+    }
+    confirmMaskBtn?.addEventListener('click', function(){
+      if (!paintingSide){ alert('왼쪽 또는 오른쪽 칠하기를 먼저 선택해주세요.'); return; }
+      ensureMaskRaw(); var bbox = computeBBoxFromMaskRaw(); if (!bbox){ alert('영역을 칠해주세요.'); return; }
+      var side = paintingSide;
+      var temp = document.createElement('canvas'); temp.width=bbox.w; temp.height=bbox.h; var t=temp.getContext('2d');
+      t.drawImage((faceBaseCanvas||faceCanvas), bbox.minX, bbox.minY, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
+      var mCanvas = document.createElement('canvas'); mCanvas.width=bbox.w; mCanvas.height=bbox.h; var mctx=mCanvas.getContext('2d');
+      var maskSub = mrawCtx.getImageData(bbox.minX, bbox.minY, bbox.w, bbox.h); mctx.putImageData(maskSub,0,0);
+      faceRegions[side] = { canvas: temp, bbox:[bbox.minX, bbox.minY, bbox.w, bbox.h] };
+      faceMasks[side]   = { maskCanvas: mCanvas, bbox:[bbox.minX, bbox.minY] };
+      selectionLocked[side] = true;
+      paintingSide = null; paintStatus.textContent = side.toUpperCase() + ' 선택됨 (점선 표시)';
+      // 선택 후 효과를 즉시 재적용
+      if (typeof reapplyLiquify==='function') reapplyLiquify();
+      gotoStep4Btn && (gotoStep4Btn.style.display='inline-block');
+      gotoStep5Btn && (gotoStep5Btn.style.display='inline-block');
+      renderStep2();
+    });
+
+    // 자동 선택 기능 제거: 더블클릭 핸들러를 두지 않음
+  });
+})();
