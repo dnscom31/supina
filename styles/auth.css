@@ -1,0 +1,12 @@
+#mainPage, #loginPage, #signUpPage { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; text-align: center; }
+#mainPage.active, #loginPage.active, #signUpPage.active { display: flex; }
+.logo-text { font-family: Georgia, 'Times New Roman', serif; font-size: 48px; color: var(--primary); margin: 0; }
+.tagline { font-size: 20px; color: var(--secondary); margin: 4px 0 24px 0; }
+.auth-card { background: var(--card-bg); padding: 24px; border-radius: 16px; box-shadow: var(--shadow); width: 320px; display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.auth-card input { padding: 10px; font-size: 16px; border: 1px solid var(--border); border-radius: 8px; }
+.auth-card button { background: var(--primary); color: #fff; border: none; padding: 10px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background 0.2s; }
+.auth-card button:hover { background: var(--secondary); }
+.auth-link { color: var(--primary); cursor: pointer; text-decoration: underline; margin-top: 8px; }
+.consent-section { margin-top: 8px; font-size: 12px; color: var(--text); text-align: left; }
+.consent-section p { margin: 0 0 4px 0; color: var(--muted); font-size: 12px; }
+.consent-section label { display: flex; align-items: center; gap: 4px; font-size: 14px; color: var(--text); }
