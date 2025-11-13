@@ -10,3 +10,97 @@
 .consent-section { margin-top: 8px; font-size: 12px; color: var(--text); text-align: left; }
 .consent-section p { margin: 0 0 4px 0; color: var(--muted); font-size: 12px; }
 .consent-section label { display: flex; align-items: center; gap: 4px; font-size: 14px; color: var(--text); }
+
+/* === Beauty Salon Auth / Landing Theme (2025-11-13) === */
+#mainPage,
+#loginPage,
+#signUpPage {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 234, 244, 0.95), transparent 55%),
+    radial-gradient(circle at 100% 0%, rgba(235, 222, 255, 0.95), transparent 55%),
+    linear-gradient(180deg, var(--bg-start), var(--bg-end));
+}
+
+#mainPage.active,
+#loginPage.active,
+#signUpPage.active {
+  display: flex;
+}
+
+.logo-text {
+  font-family: 'Playfair Display', 'Times New Roman', serif;
+  font-size: 40px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0;
+  color: #fff;
+  text-shadow:
+    0 0 18px rgba(203, 110, 176, 0.85),
+    0 14px 32px rgba(112, 59, 99, 0.85);
+}
+
+.tagline {
+  margin-top: 6px;
+  margin-bottom: 28px;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.92);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  margin-top: 8px;
+  padding: 24px 22px 20px;
+  border-radius: 24px;
+  background: radial-gradient(circle at top left, rgba(255,255,255,0.9), rgba(255,255,255,0.95));
+  box-shadow: 0 20px 55px rgba(146, 76, 128, 0.55);
+  border: 1px solid rgba(255,255,255,0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-card input {
+  border-radius: 999px;
+  border: 1px solid rgba(242,123,183,0.3);
+  padding: 10px 13px;
+  font-size: 14px;
+  outline: none;
+  transition: border 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.auth-card input:focus {
+  border-color: #f27bb7;
+  box-shadow: 0 0 0 2px rgba(242,123,183,0.3);
+}
+
+.auth-card button {
+  margin-top: 4px;
+  align-self: stretch;
+}
+
+.auth-link {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #fff;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 동의 안내영역 */
+.consent-section {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+/* 메인 페이지 버튼 두 개를 세로로 예쁘게 배치 */
+#mainPage .auth-card {
+  max-width: 260px;
+}
