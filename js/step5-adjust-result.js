@@ -33,6 +33,7 @@
     var syncTransform   = document.getElementById('syncTransform');
     var syncColor       = document.getElementById('syncColor');
     var hideUploadedChk = document.getElementById('hideUploaded');
+    var hideDefaultChk  = document.getElementById('hideDefault');
 
     var retouchToolSel       = document.getElementById('retouchTool');
     var retouchSizeInput     = document.getElementById('retouchSize');
@@ -44,6 +45,11 @@
     var inpaintBtn   = document.getElementById('inpaintResult');
     var resetAppBtn  = document.getElementById('resetApp');
 
+    // 5단계 확대/축소 버튼 (2단계 스타일)
+    var zoomInStep5    = document.getElementById('zoomInStep5');
+    var zoomOutStep5   = document.getElementById('zoomOutStep5');
+    var resetViewStep5 = document.getElementById('resetViewStep5');
+
     // 전역 상태 방어적 기본값
     if (typeof baseScale === 'undefined')      window.baseScale = { left: 1, right: 1 };
     if (typeof nudgeOffsets === 'undefined')   window.nudgeOffsets = { left: { x: 0, y: 0 }, right: { x: 0, y: 0 } };
@@ -54,6 +60,7 @@
     if (typeof currentDefaultStyle === 'undefined') window.currentDefaultStyle = null;
 
     var hideUploadedBrow = false;
+    var hideDefaultBrow = false;
 
     // 결과 뷰(줌/이동) 상태 - 이동은 우클릭 전용
     var view = {
@@ -67,6 +74,42 @@
       py: 0
     };
 
+    // 5단계 확대/축소 공용 함수 (2단계 zoomAt과 동일 개념)
+    function zoomAtResult(factor, center) {
+      if (!faceW || !faceH) return;
+
+      var newZoom = Math.min(view.max, Math.max(view.min, view.zoom * factor));
+      if (newZoom === view.zoom) return;
+
+      var cw = rc.width;
+      var ch = rc.height;
+      var baseFit = 0.95 * Math.min(cw / faceW, ch / faceH);
+      var prevS = view.zoom * baseFit;
+      var newS  = newZoom * baseFit;
+
+      var dx = (cw - prevS * faceW) / 2 + view.ox;
+      var dy = (ch - prevS * faceH) / 2 + view.oy;
+
+      var wx = (center.x - dx) / prevS;
+      var wy = (center.y - dy) / prevS;
+
+      view.zoom = newZoom;
+
+      var ndx = (cw - newS * faceW) / 2 + view.ox;
+      var ndy = (ch - newS * faceH) / 2 + view.oy;
+      view.ox += (center.x - (ndx + wx * newS));
+      view.oy += (center.y - (ndy + wy * newS));
+
+      _updateResult();
+    }
+
+    function resetViewResult() {
+      view.zoom = 1;
+      view.ox = 0;
+      view.oy = 0;
+      _updateResult();
+    }
+
     // 리터치 상태/레이어
     var retouchLayer = null;
     var retouchLayerCtx = null;
@@ -78,6 +121,7 @@
       cloneSrc: null
     };
     var retouchPainting = false;
+    var retouchHasPaint = false; // 오점 제거 브러시를 실제로 쓴 적 있는지 여부
 
     // 오른쪽 자동 정렬 1회 적용용 플래그
     var autoRightInitialized = false;
@@ -185,19 +229,28 @@
       sctx.setTransform(1, 0, 0, 1, 0, 0);
       sctx.clearRect(0, 0, faceW, faceH);
 
+      // 베이스 얼굴
       var base = (typeof faceBaseCanvas !== 'undefined' && faceBaseCanvas) ? faceBaseCanvas : faceCanvas;
       if (base) sctx.drawImage(base, 0, 0);
 
+      // 기본 눈썹
       if (useDefaultBrow && currentDefaultStyle && defaultBrows.left && defaultBrows.right) {
         drawBrowOn(sctx, defaultBrows.left, 'left');
         drawBrowOn(sctx, defaultBrows.right, 'right');
       }
 
+      // 업로드 눈썹
       if (!hideUploadedBrow && newBrows) {
         if (newBrows.left)  drawBrowOn(sctx, newBrows.left, 'left');
         if (newBrows.right) drawBrowOn(sctx, newBrows.right, 'right');
       }
 
+      // 이미 존재하는 리터치 결과도 스냅샷에 포함
+      if (retouchLayer) {
+        sctx.drawImage(retouchLayer, 0, 0);
+      }
+
+      // 리터치 레이어 캔버스 생성 (없으면)
       if (!retouchLayer) {
         retouchLayer = document.createElement('canvas');
         retouchLayer.width = faceW;
@@ -208,7 +261,7 @@
       return retouchSnapshot;
     }
 
-    // 리터치(블러/복제) 실제 적용
+    // 리터치(블러/복제) 실제 적용 - 원형 브러시로 수정
     function applyRetouchAt(ix, iy) {
       if (!retouchSnapshot || !retouchLayerCtx) return;
       if (ix < 0 || iy < 0 || ix >= faceW || iy >= faceH) return;
@@ -222,6 +275,17 @@
 
       if (tool === 'clone') {
         if (!retouchState.cloneSrc) return;
+
+        // 원형 마스크 생성
+        var maskCanvas = document.createElement('canvas');
+        maskCanvas.width = maskCanvas.height = size;
+        var maskCtx = maskCanvas.getContext('2d');
+
+        // 원형 마스크
+        maskCtx.beginPath();
+        maskCtx.arc(r, r, r, 0, 2 * Math.PI);
+        maskCtx.fillStyle = 'black';
+        maskCtx.fill();
 
         var sx = Math.round(retouchState.cloneSrc.x - r);
         var sy = Math.round(retouchState.cloneSrc.y - r);
@@ -242,15 +306,37 @@
         if (w <= 0 || h <= 0) return;
 
         retouchLayerCtx.save();
+
+        // 원형 클리핑 마스크 적용
+        retouchLayerCtx.globalCompositeOperation = 'destination-in';
+        retouchLayerCtx.drawImage(maskCanvas, dx, dy);
+        retouchLayerCtx.globalCompositeOperation = 'source-over';
+
         retouchLayerCtx.globalAlpha = Math.max(0.1, Math.min(1, retouchState.strength));
         retouchLayerCtx.drawImage(retouchSnapshot, sx, sy, w, h, dx, dy, w, h);
         retouchLayerCtx.restore();
       } else {
-        // 블러 브러시: 강하게(0~1000 느낌) 블러 패치 덮어쓰기
+        // 블러 브러시: 원형 브러시로 수정
         var sx2 = Math.round(ix - r);
         var sy2 = Math.round(iy - r);
         var w2 = Math.round(r * 2);
         var h2 = Math.round(r * 2);
+
+        // 원형 마스크 생성
+        var blurMaskCanvas = document.createElement('canvas');
+        blurMaskCanvas.width = blurMaskCanvas.height = size;
+        var blurMaskCtx = blurMaskCanvas.getContext('2d');
+
+        // 원형 그라디언트 (부드러운 엣지)
+        var gradient = blurMaskCtx.createRadialGradient(r, r, 0, r, r, r);
+        gradient.addColorStop(0, 'rgba(0,0,0,1)');
+        gradient.addColorStop(0.7, 'rgba(0,0,0,0.8)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+
+        blurMaskCtx.beginPath();
+        blurMaskCtx.arc(r, r, r, 0, 2 * Math.PI);
+        blurMaskCtx.fillStyle = gradient;
+        blurMaskCtx.fill();
 
         if (sx2 < 0) { w2 += sx2; sx2 = 0; }
         if (sy2 < 0) { h2 += sy2; sy2 = 0; }
@@ -278,6 +364,7 @@
         retouchLayerCtx.restore();
       }
 
+      retouchHasPaint = true;
       _updateResult();
     }
 
@@ -308,8 +395,8 @@
       var base = (typeof faceBaseCanvas !== 'undefined' && faceBaseCanvas) ? faceBaseCanvas : faceCanvas;
       if (base) resultCtx.drawImage(base, 0, 0);
 
-      // 기본 눈썹: 좌우 모두, hideUploaded 여부와 무관하게 그림
-      if (useDefaultBrow && currentDefaultStyle && defaultBrows.left && defaultBrows.right) {
+      // 기본 눈썹: hideDefault 체크박스 상태에 따라 표시
+      if (!hideDefaultBrow && useDefaultBrow && currentDefaultStyle && defaultBrows.left && defaultBrows.right) {
         initRightFromLeft();
         drawBrowOn(resultCtx, defaultBrows.left, 'left');
         drawBrowOn(resultCtx, defaultBrows.right, 'right');
@@ -382,39 +469,55 @@
       });
     }
 
-    // 줌(마우스 휠)
+    // 기본 눈썹 숨기기 체크
+    if (hideDefaultChk) {
+      hideDefaultBrow = hideDefaultChk.checked;
+      hideDefaultChk.addEventListener('change', function () {
+        hideDefaultBrow = !!hideDefaultChk.checked;
+        _updateResult();
+      });
+    }
+
+    // 줌(마우스 휠) - getCanvasPos를 이용해 2단계/4단계와 동일한 좌표계 사용
     rc.addEventListener('wheel', function (e) {
       if (!faceW || !faceH) return;
       e.preventDefault();
 
-      var rect = rc.getBoundingClientRect();
-      var mx = e.clientX - rect.left;
-      var my = e.clientY - rect.top;
-
-      var cw = rc.width;
-      var ch = rc.height;
-      var baseFit = 0.95 * Math.min(cw / faceW, ch / faceH);
-      var prevS = view.zoom * baseFit;
+      var pos;
+      if (typeof getCanvasPos === 'function') {
+        pos = getCanvasPos(rc, e);
+      } else {
+        var rect = rc.getBoundingClientRect();
+        var scaleX = rc.width  / rect.width;
+        var scaleY = rc.height / rect.height;
+        pos = {
+          x: (e.clientX - rect.left) * scaleX,
+          y: (e.clientY - rect.top)  * scaleY
+        };
+      }
 
       var factor = Math.exp(-e.deltaY * 0.0015);
-      var newZoom = Math.min(view.max, Math.max(view.min, view.zoom * factor));
-      if (newZoom === view.zoom) return;
-
-      var dx = (cw - prevS * faceW) / 2 + view.ox;
-      var dy = (ch - prevS * faceH) / 2 + view.oy;
-      var wx = (mx - dx) / prevS;
-      var wy = (my - dy) / prevS;
-
-      view.zoom = newZoom;
-      var newS = view.zoom * baseFit;
-      var ndx = (cw - newS * faceW) / 2 + view.ox;
-      var ndy = (ch - newS * faceH) / 2 + view.oy;
-
-      view.ox += (mx - (ndx + wx * newS));
-      view.oy += (my - (ndy + wy * newS));
-
-      _updateResult();
+      zoomAtResult(factor, pos);
     }, { passive: false });
+
+    // 확대/축소/리셋 버튼 (2단계와 같은 UX)
+    if (zoomInStep5) {
+      zoomInStep5.addEventListener('click', function () {
+        var center = { x: rc.width / 2, y: rc.height / 2 };
+        zoomAtResult(1.25, center);
+      });
+    }
+    if (zoomOutStep5) {
+      zoomOutStep5.addEventListener('click', function () {
+        var center = { x: rc.width / 2, y: rc.height / 2 };
+        zoomAtResult(1 / 1.25, center);
+      });
+    }
+    if (resetViewStep5) {
+      resetViewStep5.addEventListener('click', function () {
+        resetViewResult();
+      });
+    }
 
     // 이동: 우클릭 드래그 전용
     rc.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -434,10 +537,20 @@
         if (!faceW || !faceH) return;
         buildCompositeSnapshot();
 
-        var rect = rc.getBoundingClientRect();
-        var mx = e.clientX - rect.left;
-        var my = e.clientY - rect.top;
-        var imgPos = screenToImage(mx, my);
+        // 캔버스 좌표로 변환 (CSS 스케일, DPI 보정)
+        var pos;
+        if (typeof getCanvasPos === 'function') {
+          pos = getCanvasPos(rc, e);
+        } else {
+          var rect = rc.getBoundingClientRect();
+          var scaleX = rc.width  / rect.width;
+          var scaleY = rc.height / rect.height;
+          pos = {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top)  * scaleY
+          };
+        }
+        var imgPos = screenToImage(pos.x, pos.y);
 
         var tool = (retouchToolSel && retouchToolSel.value) || retouchState.tool;
 
@@ -464,10 +577,19 @@
       }
 
       if (retouchPainting && retouchEnable && retouchEnable.checked) {
-        var rect = rc.getBoundingClientRect();
-        var mx = e.clientX - rect.left;
-        var my = e.clientY - rect.top;
-        var imgPos = screenToImage(mx, my);
+        var pos;
+        if (typeof getCanvasPos === 'function') {
+          pos = getCanvasPos(rc, e);
+        } else {
+          var rect = rc.getBoundingClientRect();
+          var scaleX = rc.width  / rect.width;
+          var scaleY = rc.height / rect.height;
+          pos = {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top)  * scaleY
+          };
+        }
+        var imgPos = screenToImage(pos.x, pos.y);
         applyRetouchAt(imgPos.x, imgPos.y);
       }
     });
@@ -518,26 +640,227 @@
       });
     }
 
-    // 다운로드
+    // 다운로드 - 여백 제거하고 저장
     if (downloadBtn) {
       downloadBtn.addEventListener('click', function () {
-        if (!rc || typeof saveCanvasAsJpg !== 'function') return;
-        saveCanvasAsJpg(rc, 'result.jpg');
+        if (!rc || !faceW || !faceH) return;
+
+        // 임시 캔버스에 원본 크기로 그리기
+        var tempCanvas = document.createElement('canvas');
+        tempCanvas.width = faceW;
+        tempCanvas.height = faceH;
+        var tempCtx = tempCanvas.getContext('2d');
+
+        // 베이스 얼굴
+        var base = (typeof faceBaseCanvas !== 'undefined' && faceBaseCanvas) ? faceBaseCanvas : faceCanvas;
+        if (base) tempCtx.drawImage(base, 0, 0);
+
+        // 기본 눈썹 (체크박스 상태 반영)
+        if (!hideDefaultBrow && useDefaultBrow && currentDefaultStyle && defaultBrows.left && defaultBrows.right) {
+          drawBrowOn(tempCtx, defaultBrows.left, 'left');
+          drawBrowOn(tempCtx, defaultBrows.right, 'right');
+        }
+
+        // 업로드 눈썹 (체크박스 상태 반영)
+        if (!hideUploadedBrow && newBrows) {
+          if (newBrows.left)  drawBrowOn(tempCtx, newBrows.left, 'left');
+          if (newBrows.right) drawBrowOn(tempCtx, newBrows.right, 'right');
+        }
+
+        // 리터치 레이어
+        if (retouchLayer) {
+          tempCtx.drawImage(retouchLayer, 0, 0);
+        }
+
+        // 저장
+        if (typeof saveCanvasAsJpg === 'function') {
+          saveCanvasAsJpg(tempCanvas, 'result.jpg');
+        }
       });
     }
 
-    // 인페인팅(서버 연동 자리)
+    // 인페인팅 - 합성 스냅샷(기본/업로드 눈썹 + 리터치 포함)을 기준으로 마스크 영역 인페인트
     if (inpaintBtn) {
       inpaintBtn.addEventListener('click', function () {
-        alert('인페인팅은 현재 데모 범위 밖입니다. (서버 연동 시 실제 오점 제거 알고리즘을 연결하세요.)');
+        if (!faceW || !faceH) return;
+
+        // 1) 현재 합성 스냅샷 (얼굴 + 기본/업로드 눈썹 + 리터치 포함)
+        var snap = buildCompositeSnapshot();
+        if (!snap) return;
+
+        var sctx = snap.getContext('2d');
+        var snapData = sctx.getImageData(0, 0, faceW, faceH);
+
+        // 2) 스냅샷을 블러한 버전 (인페인트용 재료)
+        var blurred = document.createElement('canvas');
+        blurred.width  = faceW;
+        blurred.height = faceH;
+        var bctx = blurred.getContext('2d');
+        bctx.filter = 'blur(4px)';  // 블러 강도는 필요시 조절 가능
+        bctx.drawImage(snap, 0, 0);
+        var blurData = bctx.getImageData(0, 0, faceW, faceH);
+
+        // 3) 리터치 마스크 (있으면 그 부분만 인페인트, 없으면 전체는 그대로 사용)
+        var hasMask = retouchHasPaint && retouchLayer;
+        var maskData = null;
+        if (hasMask) {
+          var mctx = retouchLayer.getContext('2d');
+          maskData = mctx.getImageData(0, 0, faceW, faceH);
+        }
+
+        // 4) 새 얼굴 베이스용 캔버스 생성
+        var newBase = document.createElement('canvas');
+        newBase.width  = faceW;
+        newBase.height = faceH;
+        var nctx = newBase.getContext('2d');
+
+        if (hasMask && maskData) {
+          var sArr = snapData.data;
+          var bArr = blurData.data;
+          var mArr = maskData.data;
+          var out  = nctx.createImageData(faceW, faceH);
+          var oArr = out.data;
+
+          // 마스크 알파가 있는 픽셀은 blurData 사용, 아니면 snapData 사용
+          for (var i = 0; i < oArr.length; i += 4) {
+            var a = mArr[i + 3]; // 마스크 알파
+            if (a > 0) {
+              oArr[i]   = bArr[i];
+              oArr[i+1] = bArr[i+1];
+              oArr[i+2] = bArr[i+2];
+              oArr[i+3] = bArr[i+3];
+            } else {
+              oArr[i]   = sArr[i];
+              oArr[i+1] = sArr[i+1];
+              oArr[i+2] = sArr[i+2];
+              oArr[i+3] = sArr[i+3];
+            }
+          }
+          nctx.putImageData(out, 0, 0);
+        } else {
+          // 리터치 마스크가 전혀 없으면, 스냅샷 그대로를 새 베이스로 사용
+          nctx.drawImage(snap, 0, 0);
+        }
+
+        // 5) 새 베이스 이미지를 얼굴 베이스 캔버스들에 반영
+        // faceBaseCanvas가 있으면 거기에 덮어쓰기
+        if (typeof faceBaseCanvas !== 'undefined' && faceBaseCanvas) {
+          var fbCtx = faceBaseCanvas.getContext('2d');
+          faceBaseCanvas.width  = faceW;
+          faceBaseCanvas.height = faceH;
+          fbCtx.setTransform(1, 0, 0, 1, 0, 0);
+          fbCtx.clearRect(0, 0, faceW, faceH);
+          fbCtx.drawImage(newBase, 0, 0);
+        }
+
+        // 얼굴 원본 베이스도 새 이미지로 교체 (이후 리퀴파이 등에서 사용)
+        if (typeof faceBaseOriginalCanvas !== 'undefined' && faceBaseOriginalCanvas) {
+          var fboCtx = faceBaseOriginalCanvas.getContext('2d');
+          faceBaseOriginalCanvas.width  = faceW;
+          faceBaseOriginalCanvas.height = faceH;
+          fboCtx.setTransform(1, 0, 0, 1, 0, 0);
+          fboCtx.clearRect(0, 0, faceW, faceH);
+          fboCtx.drawImage(newBase, 0, 0);
+        }
+
+        // faceCanvas/faceCtx가 있으면 그것도 갱신 (다른 스텝에서 볼 수 있게)
+        if (typeof faceCanvas !== 'undefined' && faceCanvas &&
+            typeof faceCtx !== 'undefined' && faceCtx) {
+          faceCanvas.width  = faceW;
+          faceCanvas.height = faceH;
+          faceCtx.setTransform(1, 0, 0, 1, 0, 0);
+          faceCtx.clearRect(0, 0, faceW, faceH);
+          faceCtx.drawImage(newBase, 0, 0);
+        }
+
+        // 6) 리터치 레이어/플래그 정리 (이제 새 베이스에 반영되었으므로 초기화)
+        if (retouchLayerCtx) {
+          retouchLayerCtx.clearRect(0, 0, faceW, faceH);
+        }
+        retouchHasPaint = false;
+
+        // 7) 기본/업로드 눈썹은 새 베이스에 이미 구워졌으므로,
+        //    화면에서는 중복 표시가 되지 않도록 기본값으로 숨김 처리
+        if (hideUploadedChk) {
+          hideUploadedChk.checked = true;
+        }
+        if (hideDefaultChk) {
+          hideDefaultChk.checked = true;
+        }
+        hideUploadedBrow = true;
+        hideDefaultBrow  = true;
+        // 필요하면 완전히 오버레이 해제
+        // useDefaultBrow = false;
+
+        _updateResult();
+        alert('인페이팅으로 새로운 얼굴 이미지가 생성되었습니다.\n(현재 눈썹/오점 제거 상태가 베이스 이미지에 반영되었습니다)');
       });
     }
 
-    // 초기화: 로그인 유지 + 전체 상태 리셋(F5 느낌)
+    // 초기화: 로그인 유지하며 앱 상태만 초기화
     if (resetAppBtn) {
       resetAppBtn.addEventListener('click', function () {
-        // 로그인 정보는 auth.js(예: localStorage)에 맡기고 페이지 전체 새로고침
-        window.location.reload();
+        // 전역 상태 초기화
+        currentStep = 1;
+        maxStepReached = 1;
+
+        // 이미지 상태 초기화
+        faceImage = null;
+        faceW = 0;
+        faceH = 0;
+        paintingSide = null;
+        faceRegions = { left: null, right: null };
+        faceMasks = { left: null, right: null };
+        selectionLocked = { left: false, right: false };
+        browImages = { left: null, right: null };
+        newBrows = { left: null, right: null };
+        nudgeOffsets = { left: {x:0,y:0}, right: {x:0,y:0} };
+        browConfirmed = { left: false, right: false };
+        useDefaultBrow = false;
+        currentDefaultStyle = null;
+        hideUploadedBrow = false;
+        hideDefaultBrow = false;
+        retouchHasPaint = false;
+
+        // 리터치 레이어 초기화
+        if (retouchLayer) {
+          retouchLayerCtx.clearRect(0, 0, retouchLayer.width, retouchLayer.height);
+        }
+
+        // 캔버스 초기화
+        if (faceCanvas && faceCtx) {
+          faceCtx.clearRect(0, 0, faceCanvas.width, faceCanvas.height);
+        }
+        if (faceMaskCanvas && faceMaskCtx) {
+          faceMaskCtx.clearRect(0, 0, faceMaskCanvas.width, faceMaskCanvas.height);
+        }
+        if (rc && resultCtx) {
+          resultCtx.clearRect(0, 0, rc.width, rc.height);
+        }
+
+        // 파일 입력 초기화
+        if (faceInput) faceInput.value = '';
+        if (browInputLeft) browInputLeft.value = '';
+        if (browInputRight) browInputRight.value = '';
+
+        // 체크박스 초기화
+        if (hideUploadedChk) hideUploadedChk.checked = false;
+        if (hideDefaultChk) hideDefaultChk.checked = false;
+
+        // 슬라이더 초기화
+        if (leftScale) leftScale.value = '1';
+        if (leftRot) leftRot.value = '0';
+        if (leftAlpha) leftAlpha.value = '1';
+        if (rightScale) rightScale.value = '1';
+        if (rightRot) rightRot.value = '0';
+        if (rightAlpha) rightAlpha.value = '1';
+
+        // 스텝 업데이트
+        if (typeof updateSteps === 'function') {
+          updateSteps();
+        }
+
+        alert('앱이 초기화되었습니다. 1단계부터 다시 시작하세요.');
       });
     }
 
