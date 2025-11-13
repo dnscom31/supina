@@ -1,121 +1,224 @@
-// 이미지 처리 유틸(피부톤 복원, 배경 제거, 필터/샤픈)
-window.ImageProc = (function(){
-  function removeBackground(canvas) {
+// 향상된 이미지 처리 모듈 - 정밀한 털 추출
+window.ImageProc = (function() {
+
+  // 향상된 배경 제거 - 털 한올한올 정밀 추출
+  function removeBackgroundPrecise(canvas) {
     var ctx = canvas.getContext('2d');
-    var w = canvas.width, h = canvas.height;
-    var imgData = ctx.getImageData(0, 0, w, h);
+    var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     var data = imgData.data;
+
+    // 1단계: 엣지 검출로 털 경계 찾기
+    var edges = detectEdges(imgData);
+
+    // 2단계: 색상 범위 기반 털 추출
     for (var i = 0; i < data.length; i += 4) {
-      var r = data[i], g = data[i+1], b = data[i+2];
+      var r = data[i];
+      var g = data[i + 1];
+      var b = data[i + 2];
+      var a = data[i + 3];
+
+      // 밝기 계산
       var brightness = (r + g + b) / 3;
-      if (brightness > 200) data[i+3] = 0; // 흰 배경 제거
+
+      // 검은색/갈색 털 감지 (더 정밀한 범위)
+      var isDarkHair = brightness < 180 && brightness > 10;
+
+      // 색상 채도 확인 (털은 보통 채도가 낮음)
+      var max = Math.max(r, g, b);
+      var min = Math.min(r, g, b);
+      var saturation = (max - min) / (max + 0.1);
+      var isHairColor = saturation < 0.5;
+
+      // 엣지 강도 확인
+      var edgeStrength = edges[i / 4] || 0;
+
+      // 최종 판단: 털인지 배경인지
+      if (isDarkHair && isHairColor && edgeStrength > 30) {
+        // 털로 판단 - 불투명도 유지
+        data[i + 3] = Math.min(255, a * 1.2); // 약간 강화
+      } else if (brightness > 230) {
+        // 매우 밝은 배경 - 완전 투명
+        data[i + 3] = 0;
+      } else if (edgeStrength < 20) {
+        // 엣지가 약한 부분 - 부분 투명
+        data[i + 3] = Math.max(0, a * 0.3);
+      }
     }
+
+    // 3단계: 모폴로지 연산으로 노이즈 제거
+    ctx.putImageData(imgData, 0, 0);
+    applyMorphology(canvas);
+
+    return canvas;
+  }
+
+  // 엣지 검출 (Sobel 필터)
+  function detectEdges(imgData) {
+    var width = imgData.width;
+    var height = imgData.height;
+    var data = imgData.data;
+    var edges = new Float32Array(width * height);
+
+    var sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+    var sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+
+    for (var y = 1; y < height - 1; y++) {
+      for (var x = 1; x < width - 1; x++) {
+        var gx = 0, gy = 0;
+
+        for (var ky = -1; ky <= 1; ky++) {
+          for (var kx = -1; kx <= 1; kx++) {
+            var idx = ((y + ky) * width + (x + kx)) * 4;
+            var gray = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+            var kernelIdx = (ky + 1) * 3 + (kx + 1);
+            gx += gray * sobelX[kernelIdx];
+            gy += gray * sobelY[kernelIdx];
+          }
+        }
+
+        edges[y * width + x] = Math.sqrt(gx * gx + gy * gy);
+      }
+    }
+
+    return edges;
+  }
+
+  // 모폴로지 연산 (열림/닫힘)
+  function applyMorphology(canvas) {
+    var ctx = canvas.getContext('2d');
+    var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var data = imgData.data;
+
+    // 작은 구멍 채우기 (닫힘 연산)
+    for (var pass = 0; pass < 2; pass++) {
+      var newData = new Uint8ClampedArray(data);
+
+      for (var y = 1; y < canvas.height - 1; y++) {
+        for (var x = 1; x < canvas.width - 1; x++) {
+          var idx = (y * canvas.width + x) * 4 + 3;
+          var neighbors = 0;
+          var count = 0;
+
+          for (var dy = -1; dy <= 1; dy++) {
+            for (var dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              var nIdx = ((y + dy) * canvas.width + (x + dx)) * 4 + 3;
+              neighbors += data[nIdx];
+              count++;
+            }
+          }
+
+          if (neighbors / count > 128) {
+            newData[idx] = Math.min(255, data[idx] + 50);
+          }
+        }
+      }
+
+      data = newData;
+    }
+
+    imgData.data.set(data);
     ctx.putImageData(imgData, 0, 0);
   }
 
-  function replaceMaskedAreaWithSkinTone(minX, minY, boxW, boxH, maskBlock, faceCtx) {
-    var faceBlock = faceCtx.getImageData(minX, minY, boxW, boxH);
-    var facePixels = faceBlock.data;
-    var neighborColors = [];
-    for (var y = 0; y < boxH; y++){
-      for (var x = 0; x < boxW; x++){
-        var idx = (y * boxW + x) * 4;
-        var mAlpha = maskBlock[idx + 3];
-        if (mAlpha > 0){
-          for (var dy=-1; dy<=1; dy++){
-            for (var dx=-1; dx<=1; dx++){
-              if (dx===0 && dy===0) continue;
-              var nx = x + dx, ny = y + dy;
-              if (nx>=0 && nx<boxW && ny>=0 && ny<boxH){
-                var nidx = (ny * boxW + nx) * 4;
-                if (maskBlock[nidx + 3] === 0){
-                  var r = facePixels[nidx], g = facePixels[nidx+1], b = facePixels[nidx+2];
-                  if (!(r===0 && g===0 && b===0)) neighborColors.push({r:r,g:g,b:b});
-                }
-              }
+  // 스마트 털 추출 (드로잉 이미지용)
+  function extractHairFromDrawing(canvas) {
+    var ctx = canvas.getContext('2d');
+    var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var data = imgData.data;
+
+    // 선 감지 알고리즘
+    for (var i = 0; i < data.length; i += 4) {
+      var r = data[i];
+      var g = data[i + 1];
+      var b = data[i + 2];
+
+      // 회색조 값
+      var gray = (r + g + b) / 3;
+
+      // 검은 선 감지 (털)
+      if (gray < 100) {
+        // 선을 유지하되 안티앨리어싱 적용
+        data[i] = data[i + 1] = data[i + 2] = 0;
+        data[i + 3] = Math.min(255, 255 - gray * 2);
+      } else if (gray < 200) {
+        // 중간 톤 - 부드러운 털 가장자리
+        var alpha = (200 - gray) / 100;
+        data[i] = data[i + 1] = data[i + 2] = 0;
+        data[i + 3] = Math.floor(alpha * 255);
+      } else {
+        // 밝은 배경 - 완전 투명
+        data[i + 3] = 0;
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    return canvas;
+  }
+
+  // 필터 적용 함수
+  function applyFiltersToCanvas(canvas, filters) {
+    var temp = document.createElement('canvas');
+    temp.width = canvas.width;
+    temp.height = canvas.height;
+    var tctx = temp.getContext('2d');
+
+    // 필터 문자열 구성
+    var filterStr = [];
+    if (filters.bright !== 0) filterStr.push(`brightness(${100 + filters.bright}%)`);
+    if (filters.contrast !== 0) filterStr.push(`contrast(${100 + filters.contrast}%)`);
+    if (filters.saturation !== 100) filterStr.push(`saturate(${filters.saturation}%)`);
+
+    tctx.filter = filterStr.join(' ');
+    tctx.drawImage(canvas, 0, 0);
+
+    // 선명도(샤프닝) 적용
+    if (filters.sharp > 0) {
+      applySharpen(temp, filters.sharp);
+    }
+
+    return temp;
+  }
+
+  // 샤프닝 필터
+  function applySharpen(canvas, amount) {
+    var ctx = canvas.getContext('2d');
+    var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var data = imgData.data;
+    var width = canvas.width;
+    var height = canvas.height;
+
+    var kernel = [
+      0, -amount, 0,
+      -amount, 1 + 4 * amount, -amount,
+      0, -amount, 0
+    ];
+
+    var output = new Uint8ClampedArray(data);
+
+    for (var y = 1; y < height - 1; y++) {
+      for (var x = 1; x < width - 1; x++) {
+        for (var c = 0; c < 3; c++) {
+          var sum = 0;
+          for (var ky = -1; ky <= 1; ky++) {
+            for (var kx = -1; kx <= 1; kx++) {
+              var idx = ((y + ky) * width + (x + kx)) * 4 + c;
+              var kernelIdx = (ky + 1) * 3 + (kx + 1);
+              sum += data[idx] * kernel[kernelIdx];
             }
           }
+          output[(y * width + x) * 4 + c] = Math.min(255, Math.max(0, sum));
         }
       }
     }
-    if (neighborColors.length===0){
-      for (var i=0; i<facePixels.length; i+=4){
-        var a = maskBlock[i+3];
-        if (a===0){
-          var r2 = facePixels[i], g2 = facePixels[i+1], b2 = facePixels[i+2];
-          if (!(r2===0 && g2===0 && b2===0)) neighborColors.push({r:r2,g:g2,b:b2});
-        }
-      }
-    }
-    if (neighborColors.length===0) return;
-    var arr = neighborColors.map(function(c){ return {r:c.r,g:c.g,b:c.b, br:(c.r+c.g+c.b)/3}; }).sort(function(a,b){return a.br-b.br;});
-    var trim = Math.floor(arr.length*0.1);
-    var trimmed = arr.slice(trim, arr.length-trim);
-    var sumR=0,sumG=0,sumB=0; trimmed.forEach(function(c){ sumR+=c.r; sumG+=c.g; sumB+=c.b; });
-    var avgR=Math.round(sumR/trimmed.length), avgG=Math.round(sumG/trimmed.length), avgB=Math.round(sumB/trimmed.length);
-    for (var yy=0; yy<boxH; yy++){
-      for (var xx=0; xx<boxW; xx++){
-        var id2=(yy*boxW+xx)*4; var mA=maskBlock[id2+3];
-        if (mA>0){ facePixels[id2]=avgR; facePixels[id2+1]=avgG; facePixels[id2+2]=avgB; facePixels[id2+3]=255; }
-      }
-    }
-    faceCtx.putImageData(faceBlock, minX, minY);
-    try{
-      var blurCanvas = document.createElement('canvas');
-      blurCanvas.width = boxW; blurCanvas.height = boxH;
-      var bctx = blurCanvas.getContext('2d');
-      bctx.filter = 'blur(4px)';
-      bctx.drawImage(faceCtx.canvas, minX, minY, boxW, boxH, 0, 0, boxW, boxH);
-      faceCtx.drawImage(blurCanvas, minX, minY);
-    }catch(e){}
+
+    imgData.data.set(output);
+    ctx.putImageData(imgData, 0, 0);
   }
 
-  function applyFiltersToCanvas(srcCanvas, opt){
-    var bright = opt.bright||0, contrast=opt.contrast||0, saturation=(opt.saturation==null?100:opt.saturation), sharp=opt.sharp||0;
-    var w = srcCanvas.width, h = srcCanvas.height;
-    var stage1 = document.createElement('canvas'); stage1.width=w; stage1.height=h;
-    var s1 = stage1.getContext('2d');
-    var b = 1 + (bright/100), c = 1 + (contrast/100), sat = Math.max(0, saturation)/100;
-    s1.filter = 'brightness('+b+') contrast('+c+') saturate('+sat+')';
-    s1.drawImage(srcCanvas,0,0);
-    if (!sharp || sharp<=0) return stage1;
-    var stage2 = document.createElement('canvas'); stage2.width=w; stage2.height=h;
-    var s2 = stage2.getContext('2d');
-    var a = Math.min(1, Math.max(0, sharp));
-    var k = [ 0, -a, 0, -a, 1+4*a, -a, 0, -a, 0 ];
-    convolve(stage1, stage2, k, 1, 0);
-    return stage2;
-  }
-
-  function convolve(srcCanvas, dstCanvas, kernel, divisor, bias){
-    divisor = divisor||1; bias = bias||0;
-    var w = srcCanvas.width, h = srcCanvas.height;
-    var sctx = srcCanvas.getContext('2d');
-    var dctx = dstCanvas.getContext('2d');
-    var src = sctx.getImageData(0,0,w,h); var dst = dctx.createImageData(w,h);
-    var sw=src.width, sh=src.height, sdata=src.data, ddata=dst.data;
-    var kw=3, kh=3, half=1;
-    for (var y=0; y<sh; y++){
-      for (var x=0; x<sw; x++){
-        var r=0,g=0,bp=0,aChan=0;
-        for (var ky=-half; ky<=half; ky++){
-          for (var kx=-half; kx<=half; kx++){
-            var px = Math.min(sw-1, Math.max(0, x+kx));
-            var py = Math.min(sh-1, Math.max(0, y+ky));
-            var si = (py*sw+px)*4;
-            var kv = kernel[(ky+half)*kw + (kx+half)];
-            r += sdata[si] * kv; g += sdata[si+1] * kv; bp += sdata[si+2] * kv; aChan += sdata[si+3] * kv;
-          }
-        }
-        var di = (y*sw+x)*4;
-        ddata[di] = Math.min(255, Math.max(0, r/divisor + bias));
-        ddata[di+1] = Math.min(255, Math.max(0, g/divisor + bias));
-        ddata[di+2] = Math.min(255, Math.max(0, bp/divisor + bias));
-        ddata[di+3] = sdata[di+3];
-      }
-    }
-    dctx.putImageData(dst,0,0);
-  }
-
-  return { removeBackground, replaceMaskedAreaWithSkinTone, applyFiltersToCanvas, convolve };
+  return {
+    removeBackground: removeBackgroundPrecise,
+    extractHairFromDrawing: extractHairFromDrawing,
+    applyFiltersToCanvas: applyFiltersToCanvas
+  };
 })();
