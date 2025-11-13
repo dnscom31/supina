@@ -5,7 +5,7 @@ var maxStepReached = 1;
 // DOM 참조 (초기화 시 채움)
 var stepElems, panelElems;
 var faceInput, faceCanvas, faceMaskCanvas, faceCtx, faceMaskCtx, brushSizeInput;
-var clearMaskBtn, confirmMaskBtn, paintLeftBtn, paintRightBtn, paintStatus, nextFromStep2;
+var clearMaskBtn, confirmMaskBtn, paintLeftBtn, paintRightBtn, paintStatus, nextFromStep2, eraserBtn;
 var finalizeStep2Btn, gotoStep4Btn, gotoStep5Btn;
 var liquifyFeather, liquifySaturation, liquifyOpacity;
 var retouchToolSel, retouchSizeInput, retouchStrengthInput;
@@ -58,6 +58,7 @@ function selectDom() {
   paintRightBtn = qs('#paintRight');
   paintStatus = qs('#paintStatus');
   nextFromStep2 = qs('#nextFromStep2');
+  eraserBtn = qs('#eraserBtn');
 
   browInputLeft = qs('#browInputLeft');
   browCanvasLeft = qs('#browCanvasLeft');
