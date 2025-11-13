@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <title>Supina Beauty & Therapy - 눈썹 교체</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f27bb7" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- 보안: CSP 및 클릭재킹 방지 -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' blob:; frame-ancestors 'none'; media-src 'self' blob:; object-src 'none'">
 
@@ -135,7 +138,7 @@
           <p class="hint">왼쪽/오른쪽 버튼을 눌러 눈썹 영역을 선택하세요. 캔버스에서 드래그하여 마스크를 그리거나 </p>
           <div class="step2-container">
             <div class="controls">
-
+              
               <div class="side-buttons">
                 <button id="paintLeft" class="primary" type="button">왼쪽 칠하기</button>
                 <button id="paintRight" class="primary" type="button">오른쪽 칠하기</button>
@@ -145,7 +148,6 @@
               <div class="confirm-tools">
                 <button id="confirmMask" class="primary" type="button">영역 확정</button>
                 <button id="clearMask" class="ghost" type="button">마스크 지우기</button>
-                <button id="eraserBtn" class="ghost" type="button">지우개 모드로</button>
               </div>
               <div id="paintStatus" class="hint"></div>
               <div class="paint-tools">
@@ -182,7 +184,7 @@
             <h3>왼쪽 눈썹</h3>
             <div class="brow-container">
               <div class="controls">
-
+              
                 <input id="browInputLeft" type="file" accept="image/*" />
                 <div class="paint-tools">
                   <label>브러시 크기 <input id="browBrushSizeLeft" type="range" min="2" max="50" step="1" value="15" /></label>
@@ -202,7 +204,7 @@
             <h3>오른쪽 눈썹</h3>
             <div class="brow-container">
               <div class="controls">
-
+              
                 <input id="browInputRight" type="file" accept="image/*" />
                 <div class="paint-tools">
                   <label>브러시 크기 <input id="browBrushSizeRight" type="range" min="2" max="50" step="1" value="15" /></label>
@@ -250,7 +252,7 @@
                   <p class="muted">복제 도구: Alt-클릭으로 기준점 지정 후 드래그로 적용</p>
                 </fieldset>
 
-
+              
               <div class="defaults-toolbar" style="margin:12px 0; display:flex; gap:8px; flex-wrap:wrap;">
                 <span class="tag">기본 눈썹 선택:</span>
                 <button id="btnStyleCurved" class="secondary" type="button">curved</button>
@@ -259,12 +261,8 @@
                 <button id="btnStyleStraight" class="secondary" type="button">straight</button>
                 <button id="btnStyleSuitable" class="secondary" type="button">suitable</button>
                 <label style="margin-left:12px;">
-                  <input type="checkbox" id="hideDefault" />
-                  기본 눈썹 숨기기
-                </label>
-                <label style="margin-left:12px;">
                   <input type="checkbox" id="hideUploaded" />
-                  업로드한 눈썹 숨기기
+                  새로 업로드한 눈썹 숨기기
                 </label>
               </div>
               <p class="hint">왼쪽 패널에서 조정하면 오른쪽 미리보기가 즉시 갱신됩니다.</p>
