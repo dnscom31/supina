@@ -11,3 +11,45 @@
 .admin-table button.approve { background: #4caf50; color: white; }
 .admin-table button.reject, .admin-table button.delete { background: #f44336; color: white; }
 .admin-table button.make-admin { background: #2196f3; color: white; }
+
+/* === Beauty Salon Admin Theme Overrides (2025-11-13) === */
+#adminPage {
+  background: transparent;
+}
+#adminPage .app {
+  max-width: 980px;
+  margin: 0 auto;
+}
+.admin-section {
+  padding: 16px 18px 18px;
+  margin-top: 12px;
+  border-radius: 24px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+.admin-section h3 {
+  font-size: 16px;
+  color: var(--secondary);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.admin-table th,
+.admin-table td {
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.8);
+}
+.admin-table th {
+  background: linear-gradient(135deg, #f27bb7, #b48df5);
+  color: #fff;
+}
+.admin-table tbody tr:nth-child(odd) td {
+  background: rgba(248, 239, 255, 0.7);
+}
+.admin-table button {
+  border-radius: 999px;
+}
