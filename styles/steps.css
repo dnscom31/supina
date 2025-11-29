@@ -399,4 +399,94 @@
   color: #ffffff;
 }
 
+/* === 스텝 네비게이션: 화면 폭에 맞게 확장 === */
+.steps {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* 스텝 버튼이 세로로 짤리지 않도록 최소 높이 확보 */
+.steps .step {
+  min-height: 48px;
+}
+
+/* === 2~5단계 공통: 프리뷰 / 컨트롤 영역 레이아웃 === */
+.step-panel .preview {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 50vh;          /* 화면 높이의 약 절반 (비율 5에 해당) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.step-panel .controls {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 30vh;          /* 화면 높이의 약 3/10 (비율 3에 해당) */
+  overflow-y: auto;          /* 컨트롤 내용이 많으면 내부에서만 스크롤 */
+}
+
+/* === 캔버스 뷰포트 공통: 화면에 맞게 자동 확장 === */
+.canvas-group,
+#step2Viewport,
+#step4Viewport,
+#resultViewport {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  /* 정사각형 비율 유지 (지원되는 브라우저에서) */
+  aspect-ratio: 1 / 1;
+}
+
+/* 고정 그리드와 캔버스를 뷰포트 안에서 겹쳐서 배치 */
+.canvas-group canvas,
+.canvas-group .static-grid {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas-group .zoom-ui {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 10;
+}
+
+/* === 실제 캔버스 요소들을 화면 폭에 맞춰 스케일 === */
+#faceCanvas,
+#faceMaskCanvas,
+#browCanvasLeft,
+#browMaskCanvasLeft,
+#browCanvasRight,
+#browMaskCanvasRight,
+#resultCanvas {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+
+/* === 활성 스텝 패널을 화면 높이 안에 고정 === */
+.step-panel.active {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 200px);  /* 헤더 + 스텝 + 여백을 대략 200px로 가정 */
+  box-sizing: border-box;
+}
+
+.step-panel.active .preview {
+  flex: 5 1 0;
+}
+
+.step-panel.active .controls {
+  flex: 3 1 0;
+}
+
 
