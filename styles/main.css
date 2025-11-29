@@ -18,19 +18,7 @@ body {
 }
 .app-header { padding: 20px 24px; border-bottom: 1px solid var(--border); }
 .app-header h1 { margin: 0; font-size: 24px; color: var(--primary); }
-/* 텍스트 가독성 개선 */
-.app-header .sub {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #ffffff !important; /* 강제 흰색 적용 */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); /* 그림자 추가로 가독성 확보 */
-  opacity: 1;
-}
-
-/* 캔버스 터치 시 화면 스크롤 방지 */
-canvas {
-  touch-action: none;
-}
+.app-header .sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
 .app { padding: 16px; display: flex; flex-direction: column; gap: 24px; }
 button.primary { background: var(--primary); color: #fff; padding: 10px 14px; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; display: inline-block; }
 button.primary:hover { background: var(--secondary); }
@@ -93,7 +81,9 @@ body {
 .app-header .sub {
   margin-top: 4px;
   font-size: 13px;
-  opacity: 0.9;
+  opacity: 0.96;
+  color: rgba(255, 255, 255, 0.96); /* 그라디언트 위에서 잘 보이도록 화이트 계열 */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); /* 밝은 배경에서도 글자가 묻히지 않도록 */
 }
 
 /* 메인 앱 영역: 카드 스타일 */
@@ -213,5 +203,51 @@ button.ghost:hover {
   button.ghost {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* 모바일(가로 768px 이하) 전용 레이아웃 */
+@media (max-width: 768px) {
+
+  .step-panel {
+    padding: 12px;
+  }
+
+  /* 상단 단계 표시 – 버튼을 가로로 꽉 채우기 */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+  }
+
+  .steps .step {
+    padding: 6px 4px;
+    font-size: 11px;
+  }
+
+  /* 얼굴/눈썹 캔버스는 항상 화면 폭 100% 사용 */
+  #faceCanvas,
+  #faceMaskCanvas,
+  #browCanvasLeft,
+  #browCanvasRight,
+  #resultCanvas {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+  }
+
+  /* 버튼/슬라이더 영역을 세로 스택 레이아웃으로 */
+  .controls-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .controls-row button,
+  .controls-row .primary,
+  .controls-row .secondary {
+    width: 100%;
+    min-height: 40px;
+    font-size: 13px;
   }
 }
