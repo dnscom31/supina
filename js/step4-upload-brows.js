@@ -1,15 +1,22 @@
 // 4단계: 좌/우 눈썹 업로드 & 마스킹
-(function(){
-  window.addEventListener('DOMContentLoaded', function(){
-    selectDom();
-
     function handleBrowUpload(side, file){
       var img = new Image();
       img.onload = function(){
-        var maxSide = 400;
+
+        // ✅ 화면 폭 기준으로 최대 캔버스 크기 결정 (모바일 최적화)
+        var viewportW = Math.max(
+          document.documentElement.clientWidth || 0,
+          window.innerWidth || 0
+        );
+
+        // 화면 폭의 90%를 쓰되, 너무 크거나 작지 않도록 320~480 사이로 제한
+        var maxSide = Math.min(480, Math.max(320, Math.round(viewportW * 0.9)));
+
+        // 원본보다 크게 키우지는 않음
         var scale = Math.min(1, maxSide / Math.max(img.width, img.height));
         var w = Math.round(img.width * scale),
             h = Math.round(img.height * scale);
+
 
         var canvas      = (side === 'left' ? browCanvasLeft     : browCanvasRight);
         var ctx         = (side === 'left' ? browCtxLeft        : browCtxRight);
@@ -29,6 +36,76 @@
       };
       img.src = URL.createObjectURL(file);
     }
+
+        // ✅ 손으로 그린 눈썹에서 "한 올 한 올"을 추출하는 마스크 생성 함수
+    function buildHairMask(srcMat, w, h){
+      // 1) 그레이스케일로 변환
+      var gray = new cv.Mat();
+      cv.cvtColor(srcMat, gray, cv.COLOR_RGB2GRAY);
+
+      // 2) 대비 향상 (히스토그램 평활화)
+      var contrast = new cv.Mat();
+      if (cv.equalizeHist) {
+        cv.equalizeHist(gray, contrast);
+      } else {
+        gray.copyTo(contrast);
+      }
+
+      // 3) 노이즈 제거 + 선 유지 (bilateral 이 있으면 우선 사용)
+      var smooth = new cv.Mat();
+      if (cv.bilateralFilter) {
+        // d=7, sigmaColor/Space는 손으로 그린 선 기준으로 적당한 값
+        cv.bilateralFilter(contrast, smooth, 7, 50, 50, cv.BORDER_DEFAULT);
+      } else {
+        cv.GaussianBlur(contrast, smooth, new cv.Size(3,3), 0, 0, cv.BORDER_DEFAULT);
+      }
+
+      // 4) 어두운 얇은 선만 강조 (블랙햇 변환)
+      var kernelSize = 9; // 이전 15보다 작게 – 털 굵기 정도만 잡도록
+      var kernel = cv.getStructuringElement(
+        cv.MORPH_ELLIPSE,
+        new cv.Size(kernelSize, kernelSize)
+      );
+
+      var blackhat = new cv.Mat();
+      cv.morphologyEx(smooth, blackhat, cv.MORPH_BLACKHAT, kernel);
+
+      // 5) 이진화 (Otsu)로 기본 털 영역 마스크 생성
+      var maskBH = new cv.Mat();
+      cv.threshold(blackhat, maskBH, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+
+      // 6) Canny 엣지와 교차시켜 한 올씩 살리기
+      var finalMask = new cv.Mat();
+      if (cv.Canny) {
+        var edges = new cv.Mat();
+        cv.Canny(smooth, edges, 30, 80, 3, false); // 얇은 선만 추출
+        cv.bitwise_and(maskBH, edges, finalMask);  // 블랙햇 영역과 교집합
+        edges.delete();
+      } else {
+        // Canny가 없으면 블랙햇 마스크만 사용
+        maskBH.copyTo(finalMask);
+      }
+
+      // 7) 작은 노이즈 제거 + 선을 살짝 두껍게
+      var smallKernel = new cv.getStructuringElement(
+        cv.MORPH_ELLIPSE,
+        new cv.Size(3,3)
+      );
+      cv.morphologyEx(finalMask, finalMask, cv.MORPH_OPEN, smallKernel);
+      cv.dilate(finalMask, finalMask, smallKernel);
+
+      // 메모리 정리
+      gray.delete();
+      contrast.delete();
+      smooth.delete();
+      kernel.delete();
+      blackhat.delete();
+      maskBH.delete();
+      smallKernel.delete();
+
+      return finalMask; // CV_8UC1 마스크 (한 올 한 올이 살아 있음)
+    }
+
 
     function startBrowDraw(side, e){
       if (!browImages[side]) return;
@@ -250,7 +327,7 @@
       updateStep3Navigation();
     }
 
-    function processBrowImage(side){
+        function processBrowImage(side){
       try {
         if (typeof cv === 'undefined' || !cv.imread) {
           autoCropBrow(side);
@@ -265,6 +342,7 @@
 
         var srcMat = cv.imread(canvasEl);
 
+        // 원래 코드 유지: 타입이 이상하면 RGBA→RGB로 맞춰줌
         if (srcMat.type() !== cv.CV_8UC3 && srcMat.type() !== cv.CV_8UC4) {
           var tmp = new cv.Mat();
           cv.cvtColor(srcMat, tmp, cv.COLOR_RGBA2RGB);
@@ -272,25 +350,10 @@
           srcMat = tmp;
         }
 
-        var gray = new cv.Mat();
-        cv.cvtColor(srcMat, gray, cv.COLOR_RGB2GRAY);
+        // ✅ 새 털 마스크 생성 (한 올 한 올)
+        var mask = buildHairMask(srcMat, w, h);
 
-        var blur = new cv.Mat();
-        cv.GaussianBlur(gray, blur, new cv.Size(5,5), 0, 0, cv.BORDER_DEFAULT);
-
-        var kernelSize = 15;
-        var kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(kernelSize, kernelSize));
-
-        var blackhat = new cv.Mat();
-        cv.morphologyEx(blur, blackhat, cv.MORPH_BLACKHAT, kernel);
-
-        var mask = new cv.Mat();
-        cv.threshold(blackhat, mask, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-
-        var smallKernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5,5));
-        cv.morphologyEx(mask, mask, cv.MORPH_OPEN, smallKernel);
-        cv.morphologyEx(mask, mask, cv.MORPH_CLOSE, smallKernel);
-
+        // 마스크에서 bounding box 계산
         var minX = w, minY = h, maxX = 0, maxY = 0;
         for (var y = 0; y < h; y++) {
           for (var x = 0; x < w; x++) {
@@ -304,13 +367,10 @@
           }
         }
 
+        // 유효한 픽셀이 없으면 기존 자동 잘라내기로 fallback
         if (minX > maxX || minY > maxY) {
-          gray.delete();
-          blur.delete();
-          blackhat.delete();
+          srcMat.delete();
           mask.delete();
-          kernel.delete();
-          smallKernel.delete();
           autoCropBrow(side);
           return;
         }
@@ -318,43 +378,46 @@
         var boxW = maxX - minX + 1,
             boxH = maxY - minY + 1;
 
+        // ROI 자르기 (원본 + 마스크)
         var srcRoi  = srcMat.roi(new cv.Rect(minX, minY, boxW, boxH));
         var maskRoi = mask.roi(new cv.Rect(minX, minY, boxW, boxH));
 
+        // RGBA로 변환하여 알파 채널을 털 마스크로 교체
         var rgba = new cv.Mat();
         cv.cvtColor(srcRoi, rgba, cv.COLOR_RGB2RGBA);
 
         var rgbaVec = new cv.MatVector();
         cv.split(rgba, rgbaVec);
 
+        // 기존 알파 채널 삭제 후, 마스크를 알파 채널로 설정
         rgbaVec.get(3).delete();
         rgbaVec.set(3, maskRoi);
 
         var merged = new cv.Mat();
         cv.merge(rgbaVec, merged);
 
+        // Canvas에 출력
         var off = document.createElement('canvas');
         off.width  = boxW;
         off.height = boxH;
         cv.imshow(off, merged);
 
+        // 기존처럼 배경 정리
         ImageProc.removeBackground(off);
 
+        // 최종 눈썹 데이터 저장
         newBrows[side] = { canvas: off, bbox: [0, 0, boxW, boxH] };
 
+        // 메모리 해제
         srcMat.delete();
-        gray.delete();
-        blur.delete();
-        blackhat.delete();
         mask.delete();
-        kernel.delete();
-        smallKernel.delete();
         srcRoi.delete();
         maskRoi.delete();
         rgba.delete();
         rgbaVec.delete();
         merged.delete();
 
+        // 위치/배율 자동 맞춤 & 다음 단계 활성화
         autoFitSide(side);
         updateStep3Navigation();
       } catch (err) {
@@ -362,6 +425,7 @@
         autoCropBrow(side);
       }
     }
+
 
     // ✅ 사용자가 그린 마스크를 seed로 해서 GrabCut으로 눈썹 영역 정제 (가능한 경우에만 사용)
     function refineBrowWithGrabCut(tempCanvas, maskCanvas){
