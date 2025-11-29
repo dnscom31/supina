@@ -18,7 +18,19 @@ body {
 }
 .app-header { padding: 20px 24px; border-bottom: 1px solid var(--border); }
 .app-header h1 { margin: 0; font-size: 24px; color: var(--primary); }
-.app-header .sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+/* 텍스트 가독성 개선 */
+.app-header .sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #ffffff !important; /* 강제 흰색 적용 */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); /* 그림자 추가로 가독성 확보 */
+  opacity: 1;
+}
+
+/* 캔버스 터치 시 화면 스크롤 방지 */
+canvas {
+  touch-action: none;
+}
 .app { padding: 16px; display: flex; flex-direction: column; gap: 24px; }
 button.primary { background: var(--primary); color: #fff; padding: 10px 14px; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; display: inline-block; }
 button.primary:hover { background: var(--secondary); }
