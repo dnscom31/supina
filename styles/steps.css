@@ -31,115 +31,34 @@
 .nudge button:nth-child(4) { grid-column: 2; grid-row: 3; }
 
 /* 레이아웃 */
-/* === 모바일 최적화 레이아웃 (추가된 코드) === */
-@media (max-width: 768px) {
-  /* 전체 앱을 화면 높이에 고정하여 스크롤 방지 */
-  #appContainer {
-    height: 100vh;
-    overflow: hidden;
-    padding: 0;
-  }
-
-  .app {
-    height: calc(100vh - 100px); /* 헤더 영역 제외한 높이 */
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  /* 단계별 패널을 Flex 컨테이너로 변경 */
-  .step-panel.active {
-    display: flex !important;
-    flex-direction: column;
-    height: 100%;
-    padding: 0;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  /* 불필요한 제목 숨김 (공간 확보) */
-  .step-panel h2, .step-panel h3, .step-panel .hint {
-    display: none;
-  }
-
-  /* [상단] 캔버스 미리보기 영역 (확대/축소 가능 영역) */
-  .step2-container, .step4-container, .brow-container {
-    flex: 1; /* 남은 공간 모두 차지 */
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    margin: 0;
-    gap: 0;
-    background: #f0f0f0;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .step2-container .preview,
-  .step4-container .preview,
-  .brow-container .preview {
-    order: 1; /* 상단 배치 */
-    flex: 1;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* 캔버스 그룹이 화면을 넘지 않도록 제한 */
-  .canvas-group {
-    max-width: 100vw;
-    max-height: 55vh;
-    box-shadow: none;
-  }
-
-  /* [하단] 컨트롤 UI 영역 (고정 그리드) */
-  .step2-container .controls,
-  .step4-container .controls,
-  .brow-container .controls {
-    order: 2; /* 하단 배치 */
-    flex: 0 0 auto; /* 내용물만큼 높이 */
-    width: 100%;
-    background: #fff;
-    border-top-left-radius: 20px;
-    border-top-right-radius: 20px;
-    padding: 16px 20px 30px; /* 하단 여백 충분히 */
-    box-shadow: 0 -4px 15px rgba(0,0,0,0.1);
-    z-index: 100;
-    max-height: 45vh; /* 하단 패널 최대 높이 제한 */
-    overflow-y: auto; /* 내용 많으면 패널 내부만 스크롤 */
-  }
-
-  /* 5단계 조정 UI: 세로 스크롤 가능한 리스트 형태 */
-  .adjust-section {
-    margin-top: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #eee;
-  }
-
-  /* 버튼 및 슬라이더 터치 영역 확대 */
-  input[type="range"] {
-    height: 30px;
-    margin: 10px 0;
-  }
-  
-  button, button.primary, button.ghost {
-    padding: 12px;
-    font-size: 14px;
-    border-radius: 12px;
-    margin-bottom: 6px;
-  }
-}
+.step2-container, .step4-container, .brow-container { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .step2-container .controls { flex: 0 0 360px; }
-.step2-container .preview { flex: 1; min-width: 300px; }
+.step2-container .preview {
+  flex: 1;
+  min-width: 0;           /* 600px 강제 폭 제거 */
+  max-width: 640px;       /* 데스크톱에서는 너무 커지지 않도록 상한만 지정 */
+  display: flex;
+  justify-content: center; /* 항상 가운데 정렬 */
+}
 .brow-container .controls { flex: 0 0 200px; }
 .brow-container .preview { flex: 1; min-width: 200px; }
 .step4-container { align-items: flex-start; }
 .step4-container .controls { flex: 1 1 0; max-width: 35%; }
-.step4-container .preview  { flex: 0 0 65%; max-width: 65%; min-width: 700px; }
-.step4-container .preview canvas, .step4-container .preview img { width: 100%; height: auto; display: block; }
+/* 5단계 결과 미리보기: PC에서는 적당히 넓게, 모바일에서는 화면 폭에 맞춰 중앙 정렬 */
+.step4-container .preview  {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 720px;
+  display: flex;
+  justify-content: center;
+}
+
+.step4-container .preview canvas,
+.step4-container .preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
 
 .defaults-toolbar .secondary { padding: 6px 10px; border-radius: 8px; background: #ececec; border: none; cursor: pointer; }
 .defaults-toolbar .secondary:hover { background: #ddd; }
@@ -230,8 +149,9 @@
   display: flex;
   justify-content: flex-end;
 }
+/* 캔버스 그룹도 가운데 배치 */
 .step2-container .canvas-group {
-  margin-left: auto;
+  margin: 0 auto;
 }
 /* 5단계 조정 영역: 슬라이더 + 위치 이동 버튼을 가로 배치 */
 .adjust-section {
@@ -283,15 +203,16 @@
 }
 
 .adjust-section .nudge button {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   border: 1px solid var(--border);
   background: var(--card-bg);
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   padding: 0;
 }
+
 
 /* 기존 방향 배치 유지 */
 .adjust-section .nudge button:nth-child(1) { grid-column: 1; grid-row: 2; } /* ← */
@@ -405,124 +326,71 @@
 /* 슬라이더 기본 폭 */
 .step-panel input[type="range"] {
   width: 100%;
+  min-height: 24px;
 }
 
-/* 모바일 최적화 */
 @media (max-width: 768px) {
   .steps {
     padding-inline: 8px;
     margin-top: 6px;
   }
+
   .step-panel {
     margin-top: 12px;
     padding: 14px 12px 16px;
   }
+
+  /* 2단계 / 4단계(눈썹 업로드) / 5단계(결과 확인) 공통: 세로 스택 구조 */
   .step2-container,
-  .brow-container {
+  .brow-container,
+  .step4-container {
     flex-direction: column;
     gap: 12px;
   }
-}
 
-/* === 모바일 앱 스타일 UI 개선 (index.html 메타 태그 적용 필수) === */
-@media (max-width: 768px) {
-  /* 1. 전체 화면 고정 (스크롤 방지) */
-  body, #appContainer {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    width: 100%; height: 100%;
-    overflow: hidden;
-    padding: 0 !important;
-    background: #222; /* 캔버스 집중을 위한 어두운 배경 */
-  }
-
-  /* 헤더 축소 */
-  .app-header {
-    height: 50px;
-    padding: 10px 16px;
-    margin: 0;
-    border-radius: 0;
-    background: #333;
-    display: flex; align-items: center; justify-content: space-between;
-    z-index: 200;
-  }
-  .app-header h1 { font-size: 16px; color: #fff; margin: 0; }
-  .app-header .sub { display: none; } /* 공간 확보를 위해 서브텍스트 숨김 */
-
-  /* 메인 영역 */
-  .app {
-    height: calc(100% - 50px); /* 헤더 제외 높이 */
-    padding: 0;
-    display: flex; flex-direction: column;
-  }
-
-  /* 단계 네비게이션(탭) 숨김 혹은 하단으로 이동 (여기서는 공간 확보 위해 숨김 처리 후 필요시 노출) */
-  .steps { display: none; } 
-
-  /* 2. 작업 패널 (전체 화면 채움) */
-  .step-panel {
-    width: 100%; height: 100%;
-    padding: 0; margin: 0;
-    border: none; border-radius: 0;
-    background: transparent;
-  }
-  .step-panel.active { display: flex !important; flex-direction: column; }
-  .step-panel h2, .step-panel h3, .step-panel .hint { display: none; } /* 제목 숨김 */
-
-  /* 3. 상단: 캔버스 뷰어 (최대 공간) */
-  .step2-container, .step4-container, .brow-container {
-    flex: 1; /* 남은 공간 모두 차지 */
-    display: flex; flex-direction: column;
-    margin: 0; gap: 0;
-    position: relative;
-    background: #1a1a1a; /* 이미지 구분용 어두운 배경 */
-  }
-
-  /* 미리보기 영역을 위로 (Order 1) */
-  .preview {
+  /* 항상 미리보기(캔버스)를 위에, 컨트롤을 아래로 배치 */
+  .step2-container .preview,
+  .brow-container .preview,
+  .step4-container .preview {
     order: 1;
-    flex: 1;
     width: 100%;
-    display: flex; align-items: center; justify-content: center;
-    overflow: hidden;
-    padding: 20px;
-  }
-  
-  /* 캔버스 그룹 크기 제한 */
-  .canvas-group {
-    max-width: 100%; max-height: 100%;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
   }
 
-  /* 4. 하단: 컨트롤 패널 (흰색 카드 형태) */
-  .controls {
+  .step2-container .controls,
+  .brow-container .controls,
+  .step4-container .controls {
     order: 2;
-    height: auto;
-    max-height: 40%; /* 화면의 40%까지만 차지 */
-    background: #fff;
-    border-top-left-radius: 24px;
-    border-top-right-radius: 24px;
-    padding: 24px 20px;
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
-    overflow-y: auto;
-    z-index: 100;
-    display: flex; flex-direction: column; gap: 16px;
+    width: 100%;
   }
 
-  /* 버튼 및 슬라이더 터치 영역 확대 */
-  .side-buttons, .paint-tools, .confirm-tools {
-    display: flex; gap: 10px; flex-wrap: wrap; width: 100%;
-  }
-  button {
-    flex: 1;
-    padding: 14px 0; /* 터치하기 좋게 높이 키움 */
-    font-size: 15px;
-    border-radius: 12px;
-  }
-  input[type="range"] {
-    width: 100%;
-    height: 40px; /* 슬라이더 터치 영역 확대 */
-    margin: 0;
+  /* 5단계 미리보기 폭 제약 완화 */
+  .step4-container .preview {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
+/* 5단계 좌측 컨트롤 영역을 카드형 그리드로 */
+.step4-container .controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  row-gap: 12px;
+}
+
+/* 필드셋(리터치 박스)에 카드 스타일 적용 */
+.step4-container fieldset {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px 12px;
+}
+
+/* 동기화 / 기본 눈썹 선택 툴바도 카드 느낌 */
+.step4-container .defaults-toolbar,
+.step4-container .sync-row,
+.step4-container .button-group {
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+}
