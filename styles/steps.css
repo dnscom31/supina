@@ -423,3 +423,105 @@
     gap: 12px;
   }
 }
+
+/* === 모바일 앱 스타일 UI 개선 (index.html 메타 태그 적용 필수) === */
+@media (max-width: 768px) {
+  /* 1. 전체 화면 고정 (스크롤 방지) */
+  body, #appContainer {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    padding: 0 !important;
+    background: #222; /* 캔버스 집중을 위한 어두운 배경 */
+  }
+
+  /* 헤더 축소 */
+  .app-header {
+    height: 50px;
+    padding: 10px 16px;
+    margin: 0;
+    border-radius: 0;
+    background: #333;
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 200;
+  }
+  .app-header h1 { font-size: 16px; color: #fff; margin: 0; }
+  .app-header .sub { display: none; } /* 공간 확보를 위해 서브텍스트 숨김 */
+
+  /* 메인 영역 */
+  .app {
+    height: calc(100% - 50px); /* 헤더 제외 높이 */
+    padding: 0;
+    display: flex; flex-direction: column;
+  }
+
+  /* 단계 네비게이션(탭) 숨김 혹은 하단으로 이동 (여기서는 공간 확보 위해 숨김 처리 후 필요시 노출) */
+  .steps { display: none; } 
+
+  /* 2. 작업 패널 (전체 화면 채움) */
+  .step-panel {
+    width: 100%; height: 100%;
+    padding: 0; margin: 0;
+    border: none; border-radius: 0;
+    background: transparent;
+  }
+  .step-panel.active { display: flex !important; flex-direction: column; }
+  .step-panel h2, .step-panel h3, .step-panel .hint { display: none; } /* 제목 숨김 */
+
+  /* 3. 상단: 캔버스 뷰어 (최대 공간) */
+  .step2-container, .step4-container, .brow-container {
+    flex: 1; /* 남은 공간 모두 차지 */
+    display: flex; flex-direction: column;
+    margin: 0; gap: 0;
+    position: relative;
+    background: #1a1a1a; /* 이미지 구분용 어두운 배경 */
+  }
+
+  /* 미리보기 영역을 위로 (Order 1) */
+  .preview {
+    order: 1;
+    flex: 1;
+    width: 100%;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    padding: 20px;
+  }
+  
+  /* 캔버스 그룹 크기 제한 */
+  .canvas-group {
+    max-width: 100%; max-height: 100%;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  }
+
+  /* 4. 하단: 컨트롤 패널 (흰색 카드 형태) */
+  .controls {
+    order: 2;
+    height: auto;
+    max-height: 40%; /* 화면의 40%까지만 차지 */
+    background: #fff;
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    padding: 24px 20px;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+    overflow-y: auto;
+    z-index: 100;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+
+  /* 버튼 및 슬라이더 터치 영역 확대 */
+  .side-buttons, .paint-tools, .confirm-tools {
+    display: flex; gap: 10px; flex-wrap: wrap; width: 100%;
+  }
+  button {
+    flex: 1;
+    padding: 14px 0; /* 터치하기 좋게 높이 키움 */
+    font-size: 15px;
+    border-radius: 12px;
+  }
+  input[type="range"] {
+    width: 100%;
+    height: 40px; /* 슬라이더 터치 영역 확대 */
+    margin: 0;
+  }
+}
