@@ -251,3 +251,33 @@ button.ghost:hover {
     font-size: 13px;
   }
 }
+
+/* 모든 화면용 캔버스를 디바이스 폭에 맞추기 */
+#faceCanvas,
+#faceMaskCanvas,
+#browCanvasLeft,
+#browCanvasRight,
+#browMaskCanvasLeft,
+#browMaskCanvasRight,
+#resultCanvas {
+  display: block;        /* 인라인 요소가 아니도록 */
+  width: 100%;           /* 부모(프리뷰 영역) 폭에 맞춤 */
+  max-width: 100%;       /* 뷰포트 넘어가지 않게 */
+  height: auto;          /* 비율 유지하면서 자동 조정 */
+  margin: 0 auto;        /* 가운데 정렬 */
+}
+
+/* 혹시 다른 캔버스가 생겨도 기본적으로 반응형이 되도록 */
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 전체 페이지 가로 스크롤 방지 */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;  /* 화면은 항상 스텝 네비게이션(뷰포트) 폭으로 고정 */
+}
+
+
