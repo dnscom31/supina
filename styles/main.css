@@ -72,13 +72,21 @@ body {
   color: #fff;
   border: 1px solid rgba(255,255,255,0.5);
 }
-.app-header h1 {
+
+/* === 공통 레이아웃: 가로 스크롤 제거 및 기본 여백 제거 === */
+html,
+body {
   margin: 0;
-  font-size: 24px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  padding: 0;
+  max-width: 100%;
+  overflow-x: hidden; /* 좌우로 화면이 움직이지 않도록 */
 }
-.app-header .sub {
+
+/* 헤더 제목 색상을 흰색으로 고정 */
+.app-header h1 {
+  color: #ffffff;
+}
+
   margin-top: 4px;
   font-size: 13px;
   opacity: 0.96;
