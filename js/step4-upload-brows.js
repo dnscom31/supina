@@ -327,7 +327,7 @@
       updateStep3Navigation();
     }
 
-        function processBrowImage(side){
+        async function processBrowImage(side){
       try {
         if (typeof cv === 'undefined' || !cv.imread) {
           autoCropBrow(side);
@@ -351,7 +351,21 @@
         }
 
         // ✅ 새 털 마스크 생성 (한 올 한 올)
-        var mask = buildHairMask(srcMat, w, h);
+        // MediaPipe 또는 TensorFlow.js와 같은 ML 라이브러리가 로드되어 있다면
+        // 보다 정밀한 분리 결과를 얻도록 시도한다. 없으면 기존 OpenCV 방식으로 처리.
+        var mask;
+        if (typeof runMediaPipeBrowSegmentation === 'function') {
+          // runMediaPipeBrowSegmentation는 ML 기반으로 눈썹 마스크를 생성하는 비동기 함수입니다.
+          // 반환값은 Uint8Array 형식의 0/255 값 배열이어야 합니다.
+          try {
+            mask = await runMediaPipeBrowSegmentation(canvasEl);
+          } catch (e) {
+            console.warn('MediaPipe segmentation failed, falling back to OpenCV:', e);
+            mask = buildHairMask(srcMat, w, h);
+          }
+        } else {
+          mask = buildHairMask(srcMat, w, h);
+        }
 
         // 마스크에서 bounding box 계산
         var minX = w, minY = h, maxX = 0, maxY = 0;
@@ -420,6 +434,11 @@
         // 위치/배율 자동 맞춤 & 다음 단계 활성화
         autoFitSide(side);
         updateStep3Navigation();
+
+        // 5단계에서 결과를 즉시 갱신할 수 있도록 상태 업데이트
+        if (typeof currentStep !== 'undefined' && currentStep === 5 && typeof updateResult === 'function') {
+          updateResult();
+        }
       } catch (err) {
         console.error(err);
         autoCropBrow(side);
@@ -575,3 +594,132 @@
     });
   });
 })();
+
+// ===== ML 기반 눈썹 분리 도우미 =====
+/*
+ * runMediaPipeBrowSegmentation
+ *
+ * MediaPipe FaceMesh 또는 TensorFlow.js를 통해 눈썹 영역을 정밀하게 분리하는 함수입니다.
+ * 외부 라이브러리가 로드되어 있지 않을 경우 오류를 발생시키며, 호출 측에서
+ * 기존 OpenCV 기반 로직으로 fallback 하도록 합니다.
+ *
+ * @param {HTMLCanvasElement} canvasEl - 분리할 대상 이미지가 그려진 캔버스
+ * @returns {Promise<null|cv.Mat>} - 분리된 마스크(cv.Mat) 혹은 null
+ */
+async function runMediaPipeBrowSegmentation(canvasEl) {
+  /*
+   * TensorFlow.js를 활용해 MediaPipe FaceMesh 모델로 눈썹 영역을 추출합니다.
+   * - canvasEl: 얼굴 혹은 눈썹 이미지가 그려진 캔버스 요소
+   * 반환값: cv.CV_8UC1 타입의 마스크(cv.Mat)로, 눈썹 영역은 255, 배경은 0
+   */
+  // MediaPipe/TensorFlow.js가 로드되지 않았으면 오류를 발생시켜 호출 측에서 fallback 하도록 함
+  if (!window.faceLandmarksDetection && !window.facemesh) {
+    throw new Error('MediaPipe / TensorFlow.js segmentation model not loaded');
+  }
+
+  // 미리 로드한 모델이 전역에 없으면 로드합니다.
+  if (!window._browSegmentationModel) {
+    try {
+      if (window.faceLandmarksDetection) {
+        // 최신 face-landmarks-detection API 사용
+        window._browSegmentationModel = await faceLandmarksDetection.load(
+          faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
+          { maxFaces: 1, shouldLoadIrisModel: false }
+        );
+      } else if (window.facemesh) {
+        // 구버전 MediaPipe facemesh API (fallback)
+        window._browSegmentationModel = await facemesh.load({ maxFaces: 1 });
+      }
+    } catch (e) {
+      console.error('Failed to load segmentation model:', e);
+      throw new Error('Failed to load segmentation model');
+    }
+  }
+
+  const model = window._browSegmentationModel;
+  // 얼굴 랜드마크 추정
+  let predictions;
+  try {
+    if (model.estimateFaces) {
+      // TensorFlow.js face-landmarks-detection 모델
+      predictions = await model.estimateFaces({ input: canvasEl, returnTensors: false, flipHorizontal: false, predictIrises: false });
+    } else if (model.estimateFacesAsync) {
+      // MediaPipe facemesh 모델
+      predictions = await model.estimateFacesAsync(canvasEl);
+    } else {
+      throw new Error('Unsupported model interface');
+    }
+  } catch (e) {
+    console.warn('Face prediction failed:', e);
+    throw new Error('Face prediction failed');
+  }
+  if (!predictions || predictions.length === 0) {
+    throw new Error('No face detected');
+  }
+
+  // 첫 번째 얼굴의 랜드마크를 가져옴
+  const face = predictions[0];
+  // scaledMesh 또는 mesh 배열: 각 점의 [x, y, z] 좌표 (canvas 좌표계)
+  const keypoints = face.scaledMesh || face.mesh || face.annotations?.silhouette;
+  if (!keypoints) {
+    throw new Error('Face landmarks not available');
+  }
+  // 눈썹 인덱스 (468 포인트 기준). 참고: https://gist.github.com/Asadullah-Dal17/fd71c31bac74ee84e6a31af50fa62961
+  const LEFT_EYEBROW = [336, 296, 334, 293, 300, 276, 283, 282, 295, 285];
+  const RIGHT_EYEBROW = [70, 63, 105, 66, 107, 55, 65, 52, 53, 46];
+
+  // 마스크 그리기용 오프스크린 캔버스
+  const w = canvasEl.width;
+  const h = canvasEl.height;
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = w;
+  maskCanvas.height = h;
+  const ctx = maskCanvas.getContext('2d');
+
+  // 검은 바탕으로 초기화
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'white';
+
+  // 왼쪽 눈썹 영역 그리기
+  if (LEFT_EYEBROW.every(i => keypoints[i])) {
+    ctx.beginPath();
+    const p0 = keypoints[LEFT_EYEBROW[0]];
+    ctx.moveTo(p0[0], p0[1]);
+    for (let i = 1; i < LEFT_EYEBROW.length; i++) {
+      const p = keypoints[LEFT_EYEBROW[i]];
+      ctx.lineTo(p[0], p[1]);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+  // 오른쪽 눈썹 영역 그리기
+  if (RIGHT_EYEBROW.every(i => keypoints[i])) {
+    ctx.beginPath();
+    const p0r = keypoints[RIGHT_EYEBROW[0]];
+    ctx.moveTo(p0r[0], p0r[1]);
+    for (let i = 1; i < RIGHT_EYEBROW.length; i++) {
+      const p = keypoints[RIGHT_EYEBROW[i]];
+      ctx.lineTo(p[0], p[1]);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 이미지 데이터를 cv.Mat으로 변환 (RGBA)
+  const imgData = ctx.getImageData(0, 0, w, h);
+  let mat = null;
+  try {
+    mat = cv.matFromImageData(imgData);
+  } catch (e) {
+    console.error('cv.matFromImageData error:', e);
+    throw new Error('Unable to convert mask to cv.Mat');
+  }
+  // RGBA → GRAY (단일 채널)
+  const gray = new cv.Mat();
+  cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
+  mat.delete();
+
+  // 픽셀 값이 255/0인 이진 마스크를 만들어 반환 (이미 maskCanvas는 흰색/검은색임)
+  return gray;
+}
