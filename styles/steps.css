@@ -497,3 +497,49 @@
   height: 100%;
   object-fit: contain;    /* 비율을 유지하며 채움 */
 }
+
+/* === Final overrides for mobile fix (2025-12-01) === */
+/* 스텝 네비게이션을 한 줄에 모두 보이도록 하고 글자가 줄바꿈되게 함 */
+.steps {
+  overflow-x: visible;
+  white-space: normal;
+}
+.step {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  align-items: center;
+}
+.step .label {
+  white-space: normal;
+  text-align: center;
+}
+
+/* Step2 미리보기의 고정폭 제거 – 화면폭에 맞춰 축소 가능하도록 */
+.step2-container .preview {
+  min-width: 0 !important;
+  flex: 1 1 0;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* 캔버스 뷰포트를 정사각형으로 유지하고 스크린 크기에 맞춰 확장 */
+.canvas-group {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+.canvas-group canvas,
+.canvas-group .static-grid,
+.canvas-group .zoom-ui {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* z-index를 지정하여 그리드-캔버스-줌 UI 순서 유지 */
+  z-index: 1;
+}
+.canvas-group .static-grid { z-index: 0; }
+.canvas-group .zoom-ui    { z-index: 5; }
+
