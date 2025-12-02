@@ -1,5 +1,101 @@
 // 2단계: 눈썹 영역 페인팅/확인 (줌/이동, 고정 그리드, 자동선택 제거)
 (function(){
+  // MediaPipe/TensorFlow.js 기반으로 얼굴 랜드마크를 사용해 눈썹 영역을 자동 감지하는 함수
+  async function autoDetectBrowRegion(side) {
+    try {
+      if (!faceImage || !faceCanvas || !faceW || !faceH) return false;
+      // MediaPipe / TensorFlow.js가 로드되어 있는지 확인
+      if (!window.faceLandmarksDetection && !window.facemesh) return false;
+
+      // 모델 로드 (전역에 캐시)
+      if (!window._browSegmentationModel) {
+        if (window.faceLandmarksDetection) {
+          window._browSegmentationModel = await faceLandmarksDetection.load(
+            faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
+            { maxFaces: 1, shouldLoadIrisModel: false }
+          );
+        } else if (window.facemesh) {
+          window._browSegmentationModel = await facemesh.load({ maxFaces: 1 });
+        }
+      }
+      var model = window._browSegmentationModel;
+      // 얼굴 랜드마크 예측
+      var preds;
+      if (model.estimateFaces) {
+        preds = await model.estimateFaces({ input: faceCanvas, returnTensors: false, flipHorizontal: false, predictIrises: false });
+      } else if (model.estimateFacesAsync) {
+        preds = await model.estimateFacesAsync(faceCanvas);
+      }
+      if (!preds || preds.length === 0) return false;
+      var face = preds[0];
+      var points = face.scaledMesh || face.mesh;
+      if (!points) return false;
+
+      // 눈썹 인덱스 배열 정의 (468포인트 기준)
+      var LEFT_EYEBROW  = [336,296,334,293,300,276,283,282,295,285];
+      var RIGHT_EYEBROW = [70,63,105,66,107,55,65,52,53,46];
+      var targetIdx = (side === 'left') ? LEFT_EYEBROW : RIGHT_EYEBROW;
+      // 좌표 리스트 얻기
+      var coords = [];
+      for (var i = 0; i < targetIdx.length; i++) {
+        var p = points[targetIdx[i]];
+        if (p) coords.push({x: p[0], y: p[1]});
+      }
+      if (coords.length === 0) return false;
+      // 최소/최대 계산
+      var minX = coords.reduce((m, p) => Math.min(m, p.x), Infinity);
+      var minY = coords.reduce((m, p) => Math.min(m, p.y), Infinity);
+      var maxX = coords.reduce((m, p) => Math.max(m, p.x), -Infinity);
+      var maxY = coords.reduce((m, p) => Math.max(m, p.y), -Infinity);
+      var bw = Math.ceil(maxX - minX);
+      var bh = Math.ceil(maxY - minY);
+      if (bw <= 0 || bh <= 0) return false;
+
+      // 영역 이미지 캔버스 생성
+      var regionCanvas = document.createElement('canvas');
+      regionCanvas.width = bw;
+      regionCanvas.height = bh;
+      var rctx = regionCanvas.getContext('2d');
+      // 원본 얼굴에서 잘라내기
+      rctx.drawImage(faceBaseCanvas || faceImage, minX, minY, bw, bh, 0, 0, bw, bh);
+
+      // 마스크 캔버스 생성
+      var mCanvas = document.createElement('canvas');
+      mCanvas.width = bw;
+      mCanvas.height = bh;
+      var mctx = mCanvas.getContext('2d');
+      mctx.fillStyle = 'black';
+      mctx.fillRect(0, 0, bw, bh);
+      mctx.fillStyle = 'white';
+      mctx.beginPath();
+      mctx.moveTo(coords[0].x - minX, coords[0].y - minY);
+      for (var j = 1; j < coords.length; j++) {
+        mctx.lineTo(coords[j].x - minX, coords[j].y - minY);
+      }
+      mctx.closePath();
+      mctx.fill();
+
+      // 전역 상태에 저장
+      faceRegions[side] = { canvas: regionCanvas, bbox: [minX, minY, bw, bh] };
+      faceMasks[side]   = { maskCanvas: mCanvas, bbox: [minX, minY] };
+      selectionLocked[side] = true;
+
+      // 마스크 원본 초기화 (마우스로 그린 내용 제거)
+      if (side === 'left' && maskRawLeft) {
+        mrawCtxLeft.clearRect(0, 0, maskRawLeft.width, maskRawLeft.height);
+      }
+      if (side === 'right' && maskRawRight) {
+        mrawCtxRight.clearRect(0, 0, maskRawRight.width, maskRawRight.height);
+      }
+
+      // liquify 효과 재적용
+      if (typeof reapplyLiquify === 'function') reapplyLiquify();
+      return true;
+    } catch (e) {
+      console.warn('autoDetectBrowRegion 오류:', e);
+      return false;
+    }
+  }
   // 뷰 상태
   var zoom = 1.0, minZoom = 1.0, maxZoom = 4.0;
   var panX = 0, panY = 0;
@@ -406,39 +502,48 @@
       renderStep2();
     });
 
-    confirmMaskBtn?.addEventListener('click', function(){
+    confirmMaskBtn?.addEventListener('click', async function(){
       console.log('=== 영역 확정 버튼 클릭 ===');
-
       if (!paintingSide){
         alert('왼쪽 또는 오른쪽 칠하기를 먼저 선택해주세요.');
         return;
       }
-
       var side = paintingSide;
       var maskCanvas = (side === 'left') ? maskRawLeft : maskRawRight;
-
-      if (!maskCanvas) {
-        alert('영역을 칠해주세요.');
-        return;
+      var bbox = null;
+      if (maskCanvas) {
+        ensureMaskRaw(side);
+        bbox = computeBBoxFromMaskRaw(maskCanvas);
       }
-
-      ensureMaskRaw(side);
-      var bbox = computeBBoxFromMaskRaw(maskCanvas);
-
-      if (!bbox){
-        alert('영역을 칠해주세요.');
-        return;
+      // 사용자가 칠한 영역이 없는 경우: 자동 감지 시도
+      if (!bbox || !maskCanvas) {
+        var detected = false;
+        try {
+          detected = await autoDetectBrowRegion(side);
+        } catch (e) {
+          console.warn('autoDetectBrowRegion 실패:', e);
+        }
+        if (detected) {
+          paintStatus.textContent = side.toUpperCase() + ' 자동 감지 완료 (점선 표시) - 계속 작업 가능';
+          // UI 업데이트 및 렌더링
+          updateNextFromStep2();
+          gotoStep4Btn && (gotoStep4Btn.style.display='inline-block');
+          gotoStep5Btn && (gotoStep5Btn.style.display='inline-block');
+          renderStep2();
+          console.log('=== 자동 감지 완료 ===');
+          return;
+        } else {
+          alert('영역을 칠해주세요.');
+          return;
+        }
       }
-
       console.log('처리 중인 영역:', side);
-
       // 영역 이미지 추출
       var temp = document.createElement('canvas');
       temp.width=bbox.w;
       temp.height=bbox.h;
       var t=temp.getContext('2d');
       t.drawImage((faceBaseCanvas||faceCanvas), bbox.minX, bbox.minY, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
-
       // 마스크 추출
       var mCanvas = document.createElement('canvas');
       mCanvas.width=bbox.w;
@@ -447,34 +552,22 @@
       var ctx = maskCanvas.getContext('2d');
       var maskSub = ctx.getImageData(bbox.minX, bbox.minY, bbox.w, bbox.h);
       mctx.putImageData(maskSub,0,0);
-
       // 영역 저장
       faceRegions[side] = { canvas: temp, bbox:[bbox.minX, bbox.minY, bbox.w, bbox.h] };
       faceMasks[side] = { maskCanvas: mCanvas, bbox:[bbox.minX, bbox.minY] };
       selectionLocked[side] = true;
-
-      console.log('영역 저장 완료');
-      console.log('- faceRegions['+side+']:', faceRegions[side]);
-      console.log('- selectionLocked['+side+']:', selectionLocked[side]);
-
       // 해당 영역 마스크만 초기화
       ctx.clearRect(0,0,maskCanvas.width, maskCanvas.height);
-
-      // 페인팅 모드 유지 (사용자가 계속 작업할 수 있도록)
+      // 페인팅 모드 유지
       paintStatus.textContent = side.toUpperCase() + ' 확정됨 (점선 표시) - 계속 작업 가능';
-
-      // 효과 재적용
+      // liquify 효과 재적용
       if (typeof reapplyLiquify==='function') reapplyLiquify();
-
       // 버튼 업데이트
       console.log('updateNextFromStep2() 호출');
       updateNextFromStep2();
-
       gotoStep4Btn && (gotoStep4Btn.style.display='inline-block');
       gotoStep5Btn && (gotoStep5Btn.style.display='inline-block');
-
       renderStep2();
-
       console.log('=== 영역 확정 완료 ===');
     });
   });
