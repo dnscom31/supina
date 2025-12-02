@@ -222,12 +222,12 @@
   display: block;
   border-radius: 18px;
   
-  /* [추가] 캔버스를 그리드(z-index:0)보다 앞으로 가져옴 */
-  position: relative;
-  z-index: 1;
+  /* [필수] 아래 두 줄을 반드시 추가해야 사진이 그리드 위로 올라옵니다 */
+  position: relative; /* z-index가 작동하도록 위치 지정 */
+  z-index: 1;       /* z-index: 0인 그리드보다 앞에 배치 */
 }
 
-/* [추가] 마스크(그림 그리는 영역)는 사진보다 더 앞에 있어야 함 */
+/* [추가 권장] 마스크(그림 그리는 층)는 사진보다 더 위에 있어야 하므로 더 높은 값을 줍니다 */
 #faceMaskCanvas, 
 #browMaskCanvasLeft, 
 #browMaskCanvasRight {
