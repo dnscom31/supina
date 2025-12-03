@@ -3,7 +3,55 @@
   // MediaPipe/TensorFlow.js 기반으로 얼굴 랜드마크를 사용해 눈썹 영역을 자동 감지하는 함수
   async function autoDetectBrowRegion(side) {
     try {
+      // 얼굴 이미지나 캔버스가 준비되지 않은 경우 early return
       if (!faceImage || !faceCanvas || !faceW || !faceH) return false;
+
+      /*
+       * 눈썹 자동 선택은 원래 MediaPipe/TensorFlow.js 모델을 사용해 눈썹 랜드마크를 찾아
+       * 영역을 잘라내도록 설계되었습니다. 하지만 해당 라이브러리가 로드되지 않은 환경에서는
+       * 항상 false를 반환해 사용자가 손으로 영역을 그려야 했습니다. 사용자가 "자동선택이 안되는" 문제를
+       * 호소하여, 라이브러리가 없는 경우에도 대략적인 위치를 추정해서 사각형 영역을 반환하도록
+       * fallback 로직을 추가합니다. 얼굴 넓이를 기준으로 좌우 상단에 일정 비율의 영역을
+       * 눈썹 영역으로 간주합니다.
+       */
+      if (!window.faceLandmarksDetection && !window.facemesh) {
+        // 왼쪽/오른쪽을 기준으로 x 좌표 범위 계산
+        var minX, minY, bw, bh;
+        // 얼굴 상단 20% 아래부터 25% 높이 영역을 사용
+        minY = Math.floor(faceH * 0.18);
+        bh = Math.floor(faceH * 0.25);
+        if (side === 'left') {
+          minX = 0;
+          bw = Math.floor(faceW * 0.5);
+        } else {
+          minX = Math.floor(faceW * 0.5);
+          bw = faceW - minX;
+        }
+        // 캔버스에서 잘라낸 이미지 저장
+        var regionCanvas = document.createElement('canvas');
+        regionCanvas.width = bw;
+        regionCanvas.height = bh;
+        var rctx = regionCanvas.getContext('2d');
+        rctx.drawImage(faceBaseCanvas || faceImage, minX, minY, bw, bh, 0, 0, bw, bh);
+        // 마스크는 동일한 크기의 흰색 사각형으로 채움
+        var mCanvas = document.createElement('canvas');
+        mCanvas.width = bw;
+        mCanvas.height = bh;
+        var mctx = mCanvas.getContext('2d');
+        mctx.fillStyle = 'white';
+        mctx.fillRect(0, 0, bw, bh);
+        // 전역 상태 업데이트
+        faceRegions[side] = { canvas: regionCanvas, bbox: [minX, minY, bw, bh] };
+        faceMasks[side]   = { maskCanvas: mCanvas, bbox: [minX, minY] };
+        selectionLocked[side] = true;
+        // 원시 마스크 초기화
+        if (side === 'left' && maskRawLeft) mrawCtxLeft.clearRect(0, 0, maskRawLeft.width, maskRawLeft.height);
+        if (side === 'right' && maskRawRight) mrawCtxRight.clearRect(0, 0, maskRawRight.width, maskRawRight.height);
+        // liquify 효과를 다시 적용
+        if (typeof reapplyLiquify === 'function') reapplyLiquify();
+        return true;
+      }
+
       // MediaPipe / TensorFlow.js가 로드되어 있는지 확인
       if (!window.faceLandmarksDetection && !window.facemesh) return false;
 
