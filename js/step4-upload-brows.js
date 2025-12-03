@@ -5,18 +5,32 @@
     function handleBrowUpload(side, file){
       var img = new Image();
       img.onload = function(){
-        var maxSide = 400; var scale = Math.min(1, maxSide/Math.max(img.width, img.height));
-        var w=Math.round(img.width*scale), h=Math.round(img.height*scale);
-        var canvas = (side==='left'? browCanvasLeft : browCanvasRight);
-        var ctx = (side==='left'? browCtxLeft : browCtxRight);
-        var maskCanvasEl = (side==='left'? browMaskCanvasLeft : browMaskCanvasRight);
-        var maskCtxEl = (side==='left'? browMaskCtxLeft : browMaskCtxRight);
-        canvas.width = maskCanvasEl.width = w; canvas.height = maskCanvasEl.height = h;
-        ctx.clearRect(0,0,w,h); ctx.drawImage(img,0,0,w,h); maskCtxEl.clearRect(0,0,w,h);
-        browImages[side] = img; newBrows[side] = null; processBrowImage(side);
+        var maxSide = 400;
+        var scale = Math.min(1, maxSide/Math.max(img.width, img.height));
+        var w = Math.round(img.width*scale),
+            h = Math.round(img.height*scale);
+
+        var canvas      = (side==='left'? browCanvasLeft : browCanvasRight);
+        var ctx         = (side==='left'? browCtxLeft    : browCtxRight);
+        var maskCanvasEl= (side==='left'? browMaskCanvasLeft : browMaskCanvasRight);
+        var maskCtxEl   = (side==='left'? browMaskCtxLeft    : browMaskCtxRight);
+
+        canvas.width  = maskCanvasEl.width  = w;
+        canvas.height = maskCanvasEl.height = h;
+
+        ctx.clearRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        maskCtxEl.clearRect(0,0,w,h);
+
+        browImages[side] = img;
+        newBrows[side]   = null;
+        // 추가 기능(자동 추출)은 사용하지 않고,
+        // 스텝 2처럼 사용자가 영역을 칠한 뒤 [확인] 버튼으로만 처리합니다.
+        // processBrowImage(side);
       };
       img.src = URL.createObjectURL(file);
     }
+
 
     function startBrowDraw(side, e){ if(!browImages[side]) return; browMaskDrawing[side]=true; var maskCanvasEl=(side==='left'? browMaskCanvasLeft:browMaskCanvasRight); var pos=getCanvasPos(maskCanvasEl,e); browLastPos[side].x=pos.x; browLastPos[side].y=pos.y; var maskCtxEl=(side==='left'? browMaskCtxLeft:browMaskCtxRight); var brushInput=(side==='left'? browBrushLeft:browBrushRight); maskCtxEl.lineCap='round'; maskCtxEl.lineJoin='round'; maskCtxEl.lineWidth=parseInt(brushInput.value); maskCtxEl.strokeStyle='rgba(0,128,0,0.9)'; maskCtxEl.beginPath(); maskCtxEl.moveTo(pos.x,pos.y); }
     function drawBrow(side, e){ if(!browMaskDrawing[side]) return; var maskCanvasEl=(side==='left'? browMaskCanvasLeft:browMaskCanvasRight); var maskCtxEl=(side==='left'? browMaskCtxLeft:browMaskCtxRight); var pos=getCanvasPos(maskCanvasEl,e); maskCtxEl.lineTo(pos.x,pos.y); maskCtxEl.stroke(); }
