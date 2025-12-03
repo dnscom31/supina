@@ -146,14 +146,14 @@
 
 /* 2단계: 얼굴 눈썹 페인팅 */
 .step2-container .controls {
-  flex: 0 0 80px;
-  max-width: 80px;
+  flex: 0 0 320px;
+  max-width: 320px;
 }
 
 .step2-container .preview {
   flex: 1 1 0;
   min-width: 0;
-  max-width: 680px;
+  max-width: 80px;
   display: flex;
   justify-content: center;
 }
