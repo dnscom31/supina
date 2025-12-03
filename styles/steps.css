@@ -231,7 +231,7 @@
 .canvas-group canvas {
   width: 90%;
   display: block;
-  border-radius: 18px;
+  border-radius: 10px;
   
   /* 사진이 그리드 위로 올라오도록 설정 */
   position: relative; 
