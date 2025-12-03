@@ -30,6 +30,10 @@
         ctx.drawImage(img, 0, 0, w, h);
         maskCtxEl.clearRect(0, 0, w, h);
 
+        // 업로드된 눈썹이 즉시 보이도록 캔버스를 표시합니다
+        canvas.style.display = '';
+        maskCanvasEl.style.display = '';
+
         browImages[side] = img;
         newBrows[side] = null;
         processBrowImage(side);
