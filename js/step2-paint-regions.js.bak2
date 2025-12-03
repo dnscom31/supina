@@ -1,49 +1,222 @@
 // 2단계: 눈썹 영역 페인팅/확인 (줌/이동, 고정 그리드, 자동선택 제거)
 (function(){
+  // MediaPipe/TensorFlow.js 기반으로 얼굴 랜드마크를 사용해 눈썹 영역을 자동 감지하는 함수
+  async function autoDetectBrowRegion(side) {
+    try {
+      // 얼굴 이미지나 캔버스가 준비되지 않은 경우 early return
+      if (!faceImage || !faceCanvas || !faceW || !faceH) return false;
+
+      /*
+       * 눈썹 자동 선택은 원래 MediaPipe/TensorFlow.js 모델을 사용해 눈썹 랜드마크를 찾아
+       * 영역을 잘라내도록 설계되었습니다. 하지만 해당 라이브러리가 로드되지 않은 환경에서는
+       * 항상 false를 반환해 사용자가 손으로 영역을 그려야 했습니다. 사용자가 "자동선택이 안되는" 문제를
+       * 호소하여, 라이브러리가 없는 경우에도 대략적인 위치를 추정해서 사각형 영역을 반환하도록
+       * fallback 로직을 추가합니다. 얼굴 넓이를 기준으로 좌우 상단에 일정 비율의 영역을
+       * 눈썹 영역으로 간주합니다.
+       */
+      if (!window.faceLandmarksDetection && !window.facemesh) {
+        // 왼쪽/오른쪽을 기준으로 x 좌표 범위 계산
+        var minX, minY, bw, bh;
+        // 얼굴 상단 20% 아래부터 25% 높이 영역을 사용
+        minY = Math.floor(faceH * 0.18);
+        bh = Math.floor(faceH * 0.25);
+        if (side === 'left') {
+          minX = 0;
+          bw = Math.floor(faceW * 0.5);
+        } else {
+          minX = Math.floor(faceW * 0.5);
+          bw = faceW - minX;
+        }
+        // 캔버스에서 잘라낸 이미지 저장
+        var regionCanvas = document.createElement('canvas');
+        regionCanvas.width = bw;
+        regionCanvas.height = bh;
+        var rctx = regionCanvas.getContext('2d');
+        rctx.drawImage(faceBaseCanvas || faceImage, minX, minY, bw, bh, 0, 0, bw, bh);
+        // 마스크는 동일한 크기의 흰색 사각형으로 채움
+        var mCanvas = document.createElement('canvas');
+        mCanvas.width = bw;
+        mCanvas.height = bh;
+        var mctx = mCanvas.getContext('2d');
+        mctx.fillStyle = 'white';
+        mctx.fillRect(0, 0, bw, bh);
+        // 전역 상태 업데이트
+        faceRegions[side] = { canvas: regionCanvas, bbox: [minX, minY, bw, bh] };
+        faceMasks[side]   = { maskCanvas: mCanvas, bbox: [minX, minY] };
+        selectionLocked[side] = true;
+        // 원시 마스크 초기화
+        if (side === 'left' && maskRawLeft) mrawCtxLeft.clearRect(0, 0, maskRawLeft.width, maskRawLeft.height);
+        if (side === 'right' && maskRawRight) mrawCtxRight.clearRect(0, 0, maskRawRight.width, maskRawRight.height);
+        // liquify 효과를 다시 적용
+        if (typeof reapplyLiquify === 'function') reapplyLiquify();
+        return true;
+      }
+
+      // MediaPipe / TensorFlow.js가 로드되어 있는지 확인
+      if (!window.faceLandmarksDetection && !window.facemesh) return false;
+
+      // 모델 로드 (전역에 캐시)
+      if (!window._browSegmentationModel) {
+        if (window.faceLandmarksDetection) {
+          window._browSegmentationModel = await faceLandmarksDetection.load(
+            faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
+            { maxFaces: 1, shouldLoadIrisModel: false }
+          );
+        } else if (window.facemesh) {
+          window._browSegmentationModel = await facemesh.load({ maxFaces: 1 });
+        }
+      }
+      var model = window._browSegmentationModel;
+      // 얼굴 랜드마크 예측
+      var preds;
+      if (model.estimateFaces) {
+        preds = await model.estimateFaces({ input: faceCanvas, returnTensors: false, flipHorizontal: false, predictIrises: false });
+      } else if (model.estimateFacesAsync) {
+        preds = await model.estimateFacesAsync(faceCanvas);
+      }
+      if (!preds || preds.length === 0) return false;
+      var face = preds[0];
+      var points = face.scaledMesh || face.mesh;
+      if (!points) return false;
+
+      // 눈썹 인덱스 배열 정의 (468포인트 기준)
+      var LEFT_EYEBROW  = [336,296,334,293,300,276,283,282,295,285];
+      var RIGHT_EYEBROW = [70,63,105,66,107,55,65,52,53,46];
+      var targetIdx = (side === 'left') ? LEFT_EYEBROW : RIGHT_EYEBROW;
+      // 좌표 리스트 얻기
+      var coords = [];
+      for (var i = 0; i < targetIdx.length; i++) {
+        var p = points[targetIdx[i]];
+        if (p) coords.push({x: p[0], y: p[1]});
+      }
+      if (coords.length === 0) return false;
+      // 최소/최대 계산
+      var minX = coords.reduce((m, p) => Math.min(m, p.x), Infinity);
+      var minY = coords.reduce((m, p) => Math.min(m, p.y), Infinity);
+      var maxX = coords.reduce((m, p) => Math.max(m, p.x), -Infinity);
+      var maxY = coords.reduce((m, p) => Math.max(m, p.y), -Infinity);
+      var bw = Math.ceil(maxX - minX);
+      var bh = Math.ceil(maxY - minY);
+      if (bw <= 0 || bh <= 0) return false;
+
+      // 영역 이미지 캔버스 생성
+      var regionCanvas = document.createElement('canvas');
+      regionCanvas.width = bw;
+      regionCanvas.height = bh;
+      var rctx = regionCanvas.getContext('2d');
+      // 원본 얼굴에서 잘라내기
+      rctx.drawImage(faceBaseCanvas || faceImage, minX, minY, bw, bh, 0, 0, bw, bh);
+
+      // 마스크 캔버스 생성
+      var mCanvas = document.createElement('canvas');
+      mCanvas.width = bw;
+      mCanvas.height = bh;
+      var mctx = mCanvas.getContext('2d');
+      mctx.fillStyle = 'black';
+      mctx.fillRect(0, 0, bw, bh);
+      mctx.fillStyle = 'white';
+      mctx.beginPath();
+      mctx.moveTo(coords[0].x - minX, coords[0].y - minY);
+      for (var j = 1; j < coords.length; j++) {
+        mctx.lineTo(coords[j].x - minX, coords[j].y - minY);
+      }
+      mctx.closePath();
+      mctx.fill();
+
+      // 전역 상태에 저장
+      faceRegions[side] = { canvas: regionCanvas, bbox: [minX, minY, bw, bh] };
+      faceMasks[side]   = { maskCanvas: mCanvas, bbox: [minX, minY] };
+      selectionLocked[side] = true;
+
+      // 마스크 원본 초기화 (마우스로 그린 내용 제거)
+      if (side === 'left' && maskRawLeft) {
+        mrawCtxLeft.clearRect(0, 0, maskRawLeft.width, maskRawLeft.height);
+      }
+      if (side === 'right' && maskRawRight) {
+        mrawCtxRight.clearRect(0, 0, maskRawRight.width, maskRawRight.height);
+      }
+
+      // liquify 효과 재적용
+      if (typeof reapplyLiquify === 'function') reapplyLiquify();
+      return true;
+    } catch (e) {
+      console.warn('autoDetectBrowRegion 오류:', e);
+      return false;
+    }
+  }
   // 뷰 상태
   var zoom = 1.0, minZoom = 1.0, maxZoom = 4.0;
   var panX = 0, panY = 0;
   var isPanning = false;
-  var paintActive = false; // paintingSide가 있을 때만 true
+  var paintActive = false;
   var lastScreen = {x:0,y:0};
-  var maskRaw; // 원본 해상도의 마스크 버퍼(canvas)
-  var mrawCtx;
+
+  // 각 영역별 마스크 캔버스 (왼쪽/오른쪽 분리)
+  var maskRawLeft, maskRawRight;
+  var mrawCtxLeft, mrawCtxRight;
+
+  // 현재 작업 중인 영역
+  var paintingSide = null;
+
+  // 지우개 모드
+  var eraserMode = false;
 
   function screenToImage(x, y){
-    // 캔버스 내부 좌표계(픽셀) → 이미지 좌표
-    // getCanvasPos로 받은 좌표를 기준으로 변환
     return {
       x: (x - panX) / zoom,
       y: (y - panY) / zoom
     };
   }
 
-  function ensureMaskRaw(){
+  function ensureMaskRaw(side){
     if (!faceW || !faceH) return;
-    if (!maskRaw){
-      maskRaw = document.createElement('canvas');
-      maskRaw.width = faceW; maskRaw.height = faceH;
-      mrawCtx = maskRaw.getContext('2d');
-      mrawCtx.lineCap='round'; mrawCtx.lineJoin='round';
+
+    if (side === 'left') {
+      if (!maskRawLeft){
+        maskRawLeft = document.createElement('canvas');
+        maskRawLeft.width = faceW;
+        maskRawLeft.height = faceH;
+        mrawCtxLeft = maskRawLeft.getContext('2d');
+        mrawCtxLeft.lineCap='round';
+        mrawCtxLeft.lineJoin='round';
+      }
+    } else if (side === 'right') {
+      if (!maskRawRight){
+        maskRawRight = document.createElement('canvas');
+        maskRawRight.width = faceW;
+        maskRawRight.height = faceH;
+        mrawCtxRight = maskRawRight.getContext('2d');
+        mrawCtxRight.lineCap='round';
+        mrawCtxRight.lineJoin='round';
+      }
     }
   }
 
-  function computeBBoxFromMaskRaw(){
-    if (!maskRaw) return null;
-    var imgData = mrawCtx.getImageData(0,0,maskRaw.width, maskRaw.height).data;
-    var minX=maskRaw.width, minY=maskRaw.height, maxX=0, maxY=0, found=false;
-    for (var y=0;y<maskRaw.height;y++){
-      for (var x=0;x<maskRaw.width;x++){
-        var a = imgData[(y*maskRaw.width + x)*4 + 3];
-        if (a>0){ found=true; if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+  function computeBBoxFromMaskRaw(maskCanvas){
+    if (!maskCanvas) return null;
+    var ctx = maskCanvas.getContext('2d');
+    var imgData = ctx.getImageData(0,0,maskCanvas.width, maskCanvas.height).data;
+    var minX=maskCanvas.width, minY=maskCanvas.height, maxX=0, maxY=0, found=false;
+    for (var y=0;y<maskCanvas.height;y++){
+      for (var x=0;x<maskCanvas.width;x++){
+        var a = imgData[(y*maskCanvas.width + x)*4 + 3];
+        if (a>0){
+          found=true;
+          if(x<minX)minX=x;
+          if(y<minY)minY=y;
+          if(x>maxX)maxX=x;
+          if(y>maxY)maxY=y;
+        }
       }
     }
-    if (!found) return null; return {minX, minY, maxX, maxY, w:maxX-minX+1, h:maxY-minY+1};
+    if (!found) return null;
+    return {minX, minY, maxX, maxY, w:maxX-minX+1, h:maxY-minY+1};
   }
 
   function renderStep2(){
     if (!faceCanvas || !faceCtx) return;
     if (!faceImage || !faceCanvas || !faceMaskCanvas) return;
+
     // 이미지
     faceCtx.save();
     faceCtx.setTransform(1,0,0,1,0,0);
@@ -57,37 +230,73 @@
     faceMaskCtx.setTransform(1,0,0,1,0,0);
     faceMaskCtx.clearRect(0,0,faceMaskCanvas.width, faceMaskCanvas.height);
     faceMaskCtx.setTransform(zoom, 0, 0, zoom, panX, panY);
-    if (maskRaw && !selectionLocked.left && !selectionLocked.right) faceMaskCtx.drawImage(maskRaw, 0, 0);
+
+    // 왼쪽 마스크 표시 (확정되지 않은 경우)
+    if (maskRawLeft && !selectionLocked.left) {
+      faceMaskCtx.drawImage(maskRawLeft, 0, 0);
+    }
+
+    // 오른쪽 마스크 표시 (확정되지 않은 경우)
+    if (maskRawRight && !selectionLocked.right) {
+      faceMaskCtx.drawImage(maskRawRight, 0, 0);
+    }
+
     // 선택된 영역 점선 표시
     faceMaskCtx.setTransform(zoom,0,0,zoom,panX,panY);
-    faceMaskCtx.save(); faceMaskCtx.setLineDash([8,6]); faceMaskCtx.lineWidth=2; faceMaskCtx.strokeStyle='rgba(255,255,255,.9)';
+    faceMaskCtx.save();
+    faceMaskCtx.setLineDash([8,6]);
+    faceMaskCtx.lineWidth=2;
+    faceMaskCtx.strokeStyle='rgba(255,255,255,.9)';
+
     ['left','right'].forEach(function(side){
-      if (!selectionLocked[side]) return; var reg = faceRegions[side]; if(!reg||!reg.bbox) return;
-      var [x,y,w,h] = reg.bbox; faceMaskCtx.strokeRect(x, y, w, h);
-    }); faceMaskCtx.restore();
+      if (!selectionLocked[side]) return;
+      var reg = faceRegions[side];
+      if(!reg||!reg.bbox) return;
+      var x=reg.bbox[0], y=reg.bbox[1], w=reg.bbox[2], h=reg.bbox[3];
+      faceMaskCtx.strokeRect(x, y, w, h);
+    });
+
+    faceMaskCtx.restore();
     faceMaskCtx.restore();
   }
 
-  function updateNextFromStep2(){ if (nextFromStep2){ nextFromStep2.style.display = (selectionLocked.left && selectionLocked.right)? 'block':'none'; } }
+  function updateNextFromStep2(){
+    console.log('=== updateNextFromStep2 (항상 활성화 모드) ===');
+
+    if (!nextFromStep2) {
+      console.error('❌ nextFromStep2 버튼을 찾을 수 없습니다!');
+      nextFromStep2 = document.getElementById('nextFromStep2');
+      if (!nextFromStep2) {
+        console.error('❌ document.getElementById로도 찾을 수 없습니다!');
+        return;
+      }
+      console.log('✅ nextFromStep2 버튼을 찾았습니다:', nextFromStep2);
+    }
+
+    // 항상 보이고 활성 상태로 유지
+    nextFromStep2.style.display = 'block';
+    nextFromStep2.style.visibility = 'visible';
+    nextFromStep2.style.opacity = '1';
+    nextFromStep2.disabled = false;
+    nextFromStep2.classList.remove('disabled');
+
+    console.log('최종 display:', nextFromStep2.style.display, 'disabled:', nextFromStep2.disabled);
+  }
 
   function clampPan(){
-    // 이미지 경계 기반 팬 제한: 이미지 화면폭/높이와 캔버스 비교
     if (!faceCanvas) return;
     var viewW = faceCanvas.width, viewH = faceCanvas.height;
     var imgW = (faceW||0) * zoom, imgH = (faceH||0) * zoom;
 
-    // X축
     if (imgW >= viewW){
-      var minX = viewW - imgW; // 오른쪽 끝까지
-      var maxX = 0;            // 왼쪽 끝까지
+      var minX = viewW - imgW;
+      var maxX = 0;
       if (panX < minX) panX = minX;
       if (panX > maxX) panX = maxX;
     } else {
-      // 이미지가 화면보다 작으면 가운데 고정
       panX = (viewW - imgW)/2;
     }
 
-    // Y축
     if (imgH >= viewH){
       var minY = viewH - imgH;
       var maxY = 0;
@@ -100,12 +309,12 @@
 
   function zoomAt(factor, center){
     var newZoom = Math.min(maxZoom, Math.max(minZoom, zoom * factor));
-    // 중심 고정 줌
     var cx = center.x, cy = center.y;
     panX = cx - (newZoom/zoom) * (cx - panX);
     panY = cy - (newZoom/zoom) * (cy - panY);
     zoom = newZoom;
-    clampPan(); renderStep2();
+    clampPan();
+    renderStep2();
   }
 
   function reapplyLiquify(){
@@ -113,19 +322,47 @@
     faceBaseCtx.setTransform(1,0,0,1,0,0);
     faceBaseCtx.clearRect(0,0,faceW,faceH);
     faceBaseCtx.drawImage(faceBaseOriginalCanvas, 0, 0);
+
     var feather = liquifyFeather? parseInt(liquifyFeather.value) : 0;
     var sat = liquifySaturation? parseInt(liquifySaturation.value) : 100;
-    var opa = liquifyOpacity? (parseInt(liquifyOpacity.value)/100) : 1;
+    var raw = liquifyOpacity? parseInt(liquifyOpacity.value) : 500;
+    raw = Math.max(0, Math.min(500, raw));
+
+    // 선형 스케일로 변경: 더 강력한 효과
+    // 0~500 범위를 0~1로 매핑하되, 최대값에서 완전 불투명
+    var opa = raw / 500;
+
     ['left','right'].forEach(function(side){
-      var reg = faceRegions[side]; var mask = faceMasks[side]; if(!reg||!mask) return;
+      var reg = faceRegions[side];
+      var mask = faceMasks[side];
+      if(!reg||!mask) return;
+
       var minX=reg.bbox[0], minY=reg.bbox[1], boxW=reg.bbox[2], boxH=reg.bbox[3];
-      var patch = document.createElement('canvas'); patch.width=boxW; patch.height=boxH; var pctx=patch.getContext('2d');
-      var filterParts=[]; if (feather>0) filterParts.push('blur('+feather+'px)'); filterParts.push('saturate('+(sat/100)+')');
+      var patch = document.createElement('canvas');
+      patch.width=boxW;
+      patch.height=boxH;
+      var pctx=patch.getContext('2d');
+
+      var filterParts=[];
+      if (feather>0) filterParts.push('blur('+feather+'px)');
+      filterParts.push('saturate('+(sat/100)+')');
       pctx.filter = filterParts.join(' ');
+
       pctx.drawImage(faceBaseOriginalCanvas, minX, minY, boxW, boxH, 0, 0, boxW, boxH);
-      var m = document.createElement('canvas'); m.width=boxW; m.height=boxH; var mctx=m.getContext('2d'); mctx.drawImage(mask.maskCanvas,0,0);
-      pctx.globalCompositeOperation = 'destination-in'; pctx.drawImage(m,0,0);
-      faceBaseCtx.save(); faceBaseCtx.globalAlpha = opa; faceBaseCtx.drawImage(patch, minX, minY); faceBaseCtx.restore();
+
+      var m = document.createElement('canvas');
+      m.width=boxW;
+      m.height=boxH;
+      var mctx=m.getContext('2d');
+      mctx.drawImage(mask.maskCanvas,0,0);
+
+      pctx.globalCompositeOperation = 'destination-in';
+      pctx.drawImage(m,0,0);
+
+      faceBaseCtx.save();
+      faceBaseCtx.globalAlpha = opa;
+      faceBaseCtx.drawImage(patch, minX, minY);
+      faceBaseCtx.restore();
     });
   }
 
@@ -133,151 +370,268 @@
     selectDom();
     if (!faceCanvas) return;
 
-    // 마우스 동작: paintingSide가 없으면 좌클릭/우클릭 = 이동, paintingSide 있으면 좌클릭 = 페인팅, 우클릭 = 이동
     function onPointerDown(e){
       if (!faceImage) return;
       var isRight = (e.button===2);
       var pos = getCanvasPos(faceMaskCanvas, e);
       lastScreen = pos;
+
       if (!paintingSide || isRight){
         isPanning = true;
       } else {
-        // 페인팅 시작
-        ensureMaskRaw();
+        ensureMaskRaw(paintingSide);
         paintActive = true;
-        var _bw = parseInt(brushSizeInput.value); _bw = isNaN(_bw)?15:Math.max(0, Math.min(100, _bw)); mrawCtx.lineWidth = _bw;
-        mrawCtx.strokeStyle = (paintingSide==='left'?'rgba(180,140,245,0.95)':'rgba(245,138,203,0.95)');
-        mrawCtx.beginPath();
-        // 좌표를 이미지 좌표로 변환해서 기록
+
+        var _bw = parseInt(brushSizeInput.value);
+        _bw = isNaN(_bw)?15:Math.max(0, Math.min(100, _bw));
+
+        var ctx = (paintingSide==='left') ? mrawCtxLeft : mrawCtxRight;
+        ctx.lineWidth = _bw;
+
+        if (eraserMode) {
+          // 지우개 모드: destination-out으로 설정
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.strokeStyle = 'rgba(0,0,0,1)';
+        } else {
+          // 그리기 모드
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = (paintingSide==='left'?'rgba(180,140,245,0.95)':'rgba(245,138,203,0.95)');
+        }
+
+        ctx.beginPath();
         var img = screenToImage(pos.x, pos.y);
-        mrawCtx.moveTo(img.x, img.y);
+        ctx.moveTo(img.x, img.y);
       }
     }
+
     function onPointerMove(e){
       if (!faceImage) return;
       var pos = getCanvasPos(faceMaskCanvas, e);
+
       if (isPanning){
         var dx = pos.x - lastScreen.x;
         var dy = pos.y - lastScreen.y;
-        panX += dx; panY += dy;
+        panX += dx;
+        panY += dy;
         lastScreen = pos;
-        clampPan(); renderStep2();
+        clampPan();
+        renderStep2();
       } else if (paintActive){
+        var ctx = (paintingSide==='left') ? mrawCtxLeft : mrawCtxRight;
         var img = screenToImage(pos.x, pos.y);
-        mrawCtx.lineTo(img.x, img.y);
-        mrawCtx.stroke();
+        ctx.lineTo(img.x, img.y);
+        ctx.stroke();
         renderStep2();
       }
     }
+
     function onPointerUp(){
       if (isPanning){ isPanning=false; }
       if (paintActive){
-        paintActive=false; mrawCtx.closePath();
+        paintActive=false;
+        var ctx = (paintingSide==='left') ? mrawCtxLeft : mrawCtxRight;
+        ctx.closePath();
+        // 복합 연산 모드 초기화
+        ctx.globalCompositeOperation = 'source-over';
       }
     }
 
-    // 컨텍스트 메뉴 차단(우클릭 드래그용)
     faceMaskCanvas?.addEventListener('contextmenu', function(e){ e.preventDefault(); });
-
     faceMaskCanvas?.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
 
-    // 확대/축소 버튼
     document.getElementById('zoomInStep2')?.addEventListener('click', function(){
       var rect = faceMaskCanvas.getBoundingClientRect();
       zoomAt(1.25, {x: rect.width/2 * (faceMaskCanvas.width/rect.width), y: rect.height/2 * (faceMaskCanvas.height/rect.height)});
     });
+
     document.getElementById('zoomOutStep2')?.addEventListener('click', function(){
       var rect = faceMaskCanvas.getBoundingClientRect();
       zoomAt(1/1.25, {x: rect.width/2 * (faceMaskCanvas.width/rect.width), y: rect.height/2 * (faceMaskCanvas.height/rect.height)});
     });
+
     document.getElementById('resetViewStep2')?.addEventListener('click', function(){
-      zoom = 1.0; panX = 0; panY = 0; renderStep2();
+      zoom = 1.0;
+      panX = 0;
+      panY = 0;
+      renderStep2();
     });
 
-    // 기존 버튼 동작: 왼쪽/오른쪽 칠하기 → paintingSide 설정/해제
-    paintLeftBtn?.addEventListener('click', function(){ if(!faceImage) return; paintingSide='left'; paintStatus.textContent='왼쪽 페인팅 모드 (좌클릭: 페인팅 / 우클릭: 이동)'; });
-    paintRightBtn?.addEventListener('click', function(){ if(!faceImage) return; paintingSide='right'; paintStatus.textContent='오른쪽 페인팅 모드 (좌클릭: 페인팅 / 우클릭: 이동)'; });
+    paintLeftBtn?.addEventListener('click', function(){
+      if(!faceImage) return;
+      paintingSide='left';
+      eraserMode = false;
+      paintStatus.textContent='왼쪽 페인팅 모드 (좌클릭: 페인팅 / 우클릭: 이동)';
+    });
 
-    function clearFaceMask(){
-      if (!faceImage) return;
-      ensureMaskRaw();
-      mrawCtx.clearRect(0,0,maskRaw.width, maskRaw.height);
-      renderStep2();
-    }
-    clearMaskBtn?.addEventListener('click', clearFaceMask);
-    nextFromStep2?.addEventListener('click', function(){
-      if (selectionLocked.left && selectionLocked.right){
-        currentStep = 3; maxStepReached = Math.max(maxStepReached, 3); updateSteps();
+    paintRightBtn?.addEventListener('click', function(){
+      if(!faceImage) return;
+      paintingSide='right';
+      eraserMode = false;
+      paintStatus.textContent='오른쪽 페인팅 모드 (좌클릭: 페인팅 / 우클릭: 이동)';
+    });
+
+    // 지우개 버튼 (새로 추가 필요)
+    var eraserBtn = document.getElementById('eraserBtn');
+    eraserBtn?.addEventListener('click', function(){
+      if(!faceImage || !paintingSide) {
+        alert('먼저 왼쪽 또는 오른쪽 칠하기를 선택해주세요.');
+        return;
+      }
+      eraserMode = !eraserMode;
+      if (eraserMode) {
+        paintStatus.textContent = paintingSide.toUpperCase() + ' 지우개 모드 (좌클릭: 지우기 / 우클릭: 이동)';
+        eraserBtn.textContent = '그리기 모드로';
       } else {
-        alert('왼쪽과 오른쪽 영역을 모두 확정해주세요.');
+        paintStatus.textContent = paintingSide.toUpperCase() + ' 페인팅 모드 (좌클릭: 페인팅 / 우클릭: 이동)';
+        eraserBtn.textContent = '지우개 모드로';
       }
     });
-    finalizeStep2Btn?.addEventListener('click', function(){ currentStep=3; maxStepReached=Math.max(maxStepReached,3); updateSteps(); });
-    gotoStep4Btn?.addEventListener('click', function(){ currentStep=4; maxStepReached=Math.max(maxStepReached,4); updateSteps(); });
-    gotoStep5Btn?.addEventListener('click', function(){ currentStep=5; maxStepReached=Math.max(maxStepReached,5); updateSteps(); });
-    liquifyFeather?.addEventListener('input', function(){ reapplyLiquify(); renderStep2(); });
-    liquifySaturation?.addEventListener('input', function(){ reapplyLiquify(); renderStep2(); });
-    liquifyOpacity?.addEventListener('input', function(){ reapplyLiquify(); renderStep2(); });
 
-    function confirmFaceMask(){
-      if (!faceImage || !paintingSide){ alert('왼쪽/오른쪽 중 하나를 선택하세요.'); return; }
-      ensureMaskRaw();
-      // 마스크의 바운딩 박스 계산
-      var imgData = mrawCtx.getImageData(0,0,maskRaw.width, maskRaw.height);
-      var data = imgData.data;
-      var minX=maskRaw.width, minY=maskRaw.height, maxX=0, maxY=0, found=false;
-      for (var y=0;y<maskRaw.height;y++){
-        for (var x=0;x<maskRaw.width;x++){
-          var a = data[(y*maskRaw.width + x)*4 + 3];
-          if (a>0){ found=true; if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+    function clearFaceMask(side){
+      if (!faceImage) return;
+
+      if (side === 'left') {
+        ensureMaskRaw('left');
+        mrawCtxLeft.clearRect(0,0,maskRawLeft.width, maskRawLeft.height);
+      } else if (side === 'right') {
+        ensureMaskRaw('right');
+        mrawCtxRight.clearRect(0,0,maskRawRight.width, maskRawRight.height);
+      } else {
+        // 전체 초기화
+        if (maskRawLeft) mrawCtxLeft.clearRect(0,0,maskRawLeft.width, maskRawLeft.height);
+        if (maskRawRight) mrawCtxRight.clearRect(0,0,maskRawRight.width, maskRawRight.height);
+      }
+
+      renderStep2();
+    }
+
+    clearMaskBtn?.addEventListener('click', function(){
+      clearFaceMask(paintingSide);
+    });
+
+    nextFromStep2?.addEventListener('click', function(){
+      currentStep = 3;
+      maxStepReached = Math.max(maxStepReached, 3);
+      updateSteps();
+    });
+
+    finalizeStep2Btn?.addEventListener('click', function(){
+      currentStep=3;
+      maxStepReached=Math.max(maxStepReached,3);
+      updateSteps();
+    });
+
+    gotoStep4Btn?.addEventListener('click', function(){
+      currentStep=4;
+      maxStepReached=Math.max(maxStepReached,4);
+      updateSteps();
+    });
+
+    gotoStep5Btn?.addEventListener('click', function(){
+      currentStep=5;
+      maxStepReached=Math.max(maxStepReached,5);
+      updateSteps();
+    });
+
+    liquifyFeather?.addEventListener('input', function(){
+      reapplyLiquify();
+      renderStep2();
+    });
+
+    liquifySaturation?.addEventListener('input', function(){
+      reapplyLiquify();
+      renderStep2();
+    });
+
+    liquifyOpacity?.addEventListener('input', function(){
+      reapplyLiquify();
+      renderStep2();
+    });
+
+    confirmMaskBtn?.addEventListener('click', async function(){
+      console.log('=== 영역 확정 버튼 클릭 ===');
+      if (!paintingSide){
+        alert('왼쪽 또는 오른쪽 칠하기를 먼저 선택해주세요.');
+        return;
+      }
+      var side = paintingSide;
+      var maskCanvas = (side === 'left') ? maskRawLeft : maskRawRight;
+      var bbox = null;
+      if (maskCanvas) {
+        ensureMaskRaw(side);
+        bbox = computeBBoxFromMaskRaw(maskCanvas);
+      }
+      // 사용자가 칠한 영역이 없는 경우: 자동 감지 시도
+      if (!bbox || !maskCanvas) {
+        var detected = false;
+        try {
+          detected = await autoDetectBrowRegion(side);
+        } catch (e) {
+          console.warn('autoDetectBrowRegion 실패:', e);
+        }
+        if (detected) {
+          paintStatus.textContent = side.toUpperCase() + ' 자동 감지 완료 (점선 표시) - 계속 작업 가능';
+          // UI 업데이트 및 렌더링
+          updateNextFromStep2();
+          gotoStep4Btn && (gotoStep4Btn.style.display='inline-block');
+          gotoStep5Btn && (gotoStep5Btn.style.display='inline-block');
+          renderStep2();
+          console.log('=== 자동 감지 완료 ===');
+          return;
+        } else {
+          alert('영역을 칠해주세요.');
+          return;
         }
       }
-      if (!found){ alert('영역을 칠해주세요.'); return; }
-      var boxW = maxX-minX+1, boxH = maxY-minY+1;
-      // 영역 캔버스 추출
-      var temp = document.createElement('canvas'); temp.width=boxW; temp.height=boxH;
-      var t = temp.getContext('2d'); t.drawImage((faceBaseOriginalCanvas||faceBaseCanvas||faceCanvas), minX, minY, boxW, boxH, 0, 0, boxW, boxH);
-      // 피부톤 채움 대신 유동화/채도/불투명도 파이프라인을 적용 (확인 후에도 재적용 가능)
-      reapplyLiquify();
-
-      // 마스크/캔버스 저장
-      var mCanvas = document.createElement('canvas'); mCanvas.width=boxW; mCanvas.height=boxH; mCanvas.getContext('2d').putImageData(maskSub,0,0);
-      t.globalCompositeOperation='destination-in'; t.drawImage(mCanvas,0,0); t.globalCompositeOperation='source-over';
-
-      faceRegions[paintingSide] = { canvas: temp, bbox:[minX,minY,boxW,boxH] };
-      faceMasks[paintingSide]   = { maskCanvas: mCanvas, bbox:[minX,minY] };
-
-      // 다음 준비
-      // 선택 완료 후에는 paintingSide 해제 → 드래그/이동 모드
-      paintingSide = null;
-      paintStatus.textContent = '';
-      // 두 눈썹 모두 완료 시 3단계로
-      if (faceRegions.left && faceRegions.right){
-        currentStep = 3; maxStepReached = Math.max(maxStepReached,3); updateSteps();
-      } else { updateNextFromStep2(); }
-      renderStep2();
-    }
-    confirmMaskBtn?.addEventListener('click', function(){
-      if (!paintingSide){ alert('왼쪽 또는 오른쪽 칠하기를 먼저 선택해주세요.'); return; }
-      ensureMaskRaw(); var bbox = computeBBoxFromMaskRaw(); if (!bbox){ alert('영역을 칠해주세요.'); return; }
-      var side = paintingSide;
-      var temp = document.createElement('canvas'); temp.width=bbox.w; temp.height=bbox.h; var t=temp.getContext('2d');
+      console.log('처리 중인 영역:', side);
+      // 영역 이미지 추출
+      var temp = document.createElement('canvas');
+      temp.width=bbox.w;
+      temp.height=bbox.h;
+      var t=temp.getContext('2d');
       t.drawImage((faceBaseCanvas||faceCanvas), bbox.minX, bbox.minY, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
-      var mCanvas = document.createElement('canvas'); mCanvas.width=bbox.w; mCanvas.height=bbox.h; var mctx=mCanvas.getContext('2d');
-      var maskSub = mrawCtx.getImageData(bbox.minX, bbox.minY, bbox.w, bbox.h); mctx.putImageData(maskSub,0,0);
+      // 마스크 추출
+      var mCanvas = document.createElement('canvas');
+      mCanvas.width=bbox.w;
+      mCanvas.height=bbox.h;
+      var mctx=mCanvas.getContext('2d');
+      var ctx = maskCanvas.getContext('2d');
+      var maskSub = ctx.getImageData(bbox.minX, bbox.minY, bbox.w, bbox.h);
+      mctx.putImageData(maskSub,0,0);
+      // 영역 저장
       faceRegions[side] = { canvas: temp, bbox:[bbox.minX, bbox.minY, bbox.w, bbox.h] };
-      faceMasks[side]   = { maskCanvas: mCanvas, bbox:[bbox.minX, bbox.minY] };
+      faceMasks[side] = { maskCanvas: mCanvas, bbox:[bbox.minX, bbox.minY] };
       selectionLocked[side] = true;
-      paintingSide = null; paintStatus.textContent = side.toUpperCase() + ' 선택됨 (점선 표시)';
-      // 선택 후 효과를 즉시 재적용
+      // 해당 영역 마스크만 초기화
+      ctx.clearRect(0,0,maskCanvas.width, maskCanvas.height);
+      // 페인팅 모드 유지
+      paintStatus.textContent = side.toUpperCase() + ' 확정됨 (점선 표시) - 계속 작업 가능';
+      // liquify 효과 재적용
       if (typeof reapplyLiquify==='function') reapplyLiquify();
+      // 버튼 업데이트
+      console.log('updateNextFromStep2() 호출');
+      updateNextFromStep2();
       gotoStep4Btn && (gotoStep4Btn.style.display='inline-block');
       gotoStep5Btn && (gotoStep5Btn.style.display='inline-block');
       renderStep2();
+      console.log('=== 영역 확정 완료 ===');
     });
 
-    // 자동 선택 기능 제거: 더블클릭 핸들러를 두지 않음
+    // 상세 설정 토글: paint-tools 영역을 숨기거나 표시합니다.
+    var detailBtn = document.getElementById('toggleDetailSettings');
+    var detailSection = document.getElementById('detailSettings');
+    if (detailBtn && detailSection) {
+      // 초기에는 숨김
+      detailSection.style.display = 'none';
+      detailBtn.addEventListener('click', function(){
+        if (detailSection.style.display === 'none') {
+          detailSection.style.display = 'flex';
+        } else {
+          detailSection.style.display = 'none';
+        }
+      });
+    }
   });
 })();
