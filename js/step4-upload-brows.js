@@ -56,19 +56,21 @@
 
       ImageProc.removeBackground(temp);
       newBrows[side] = { canvas: temp, bbox: [0,0,boxW,boxH] };
-      // 기존 마스크를 지우고 선택된 영역을 점선으로 표시합니다.
+
+      // 마스크를 지우고, 선택한 영역에 흰색 점선 사각형 표시
       maskCtxEl.clearRect(0,0,w,h);
-      // 흰색 점선으로 선택 영역 바운딩 박스 그리기
       maskCtxEl.save();
-      maskCtxEl.setLineDash([6,4]);
-      maskCtxEl.strokeStyle = 'rgba(255,255,255,0.9)';
+      maskCtxEl.setLineDash([8,6]);
       maskCtxEl.lineWidth = 2;
+      maskCtxEl.strokeStyle = 'rgba(255,255,255,0.9)';
       maskCtxEl.strokeRect(minX, minY, boxW, boxH);
       maskCtxEl.restore();
-      browConfirmed[side] = true;
+
+      browConfirmed[side]=true;
       autoFitSide(side);
       updateStep3Navigation();
     }
+
 
     function autoFitSide(side){
       var region = faceRegions[side]; var browObj = newBrows[side]; if(!region||!browObj) return;
