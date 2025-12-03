@@ -238,28 +238,13 @@
   z-index: 1;
 }
 
-/* ==== 2025-12-03 커스텀 수정 ==== */
-/* 2단계 뷰포트 내 캔버스 크기를 확장하여 전체 얼굴을 더 크게 보여줍니다 */
+/* 2단계: 미리보기 캔버스의 CSS 너비를 실제 크기와 맞춰 드래그 영역과 보정 영역이 일치하도록 100%로 지정 */
 #step2Viewport canvas {
-  width: 80%;
+  width: 100%;
 }
 
-/* 2단계 뷰포트 오버플로우를 숨기지 않음: 확대/축소 UI가 잘리지 않도록 */
-#step2Viewport {
-  overflow: visible;
-}
-
-/* 2단계 줌 UI를 오른쪽 상단에 고정하고 시야에서 잘리지 않도록 합니다 */
-#step2Viewport .zoom-ui {
-  left: auto;
-  right: 8px;
-  transform: none;
-  z-index: 10;
-}
-#step2Viewport .zoom-ui button {
-  padding: 6px 10px;
-  font-size: 12px;
-}
+/* ==== 2025-12-03 커스텀 수정 ==== */
+/* 2단계 뷰포트 관련 오버라이드는 제거되었습니다. 미리보기 캔버스는 기본값(70%)을 사용합니다. */
 
 /* 마스크(그림 그리는 층)는 사진보다 더 위에 배치 */
 #faceMaskCanvas, 
@@ -518,6 +503,13 @@
   gap: 8px;
   align-items: center;
 }
+
+/* 상세 설정 영역은 기본적으로 숨김 처리 */
+#detailSettings {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
 .defaults-toolbar .tag {
   grid-column: 1 / -1;
   margin-bottom: 4px;
@@ -536,6 +528,23 @@
   margin-top: 4px;
 }
 
+/* Step2 헤더 오른쪽에 배치된 줌 컨트롤 버튼 스타일 */
+/* Step2: 안내 문구 옆에 배치된 줌 컨트롤 버튼 스타일 */
+.step2-info .zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.step2-info .zoom-controls button {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: #333;
+  cursor: pointer;
+}
+
 /* =========================
  * 프리뷰 / 컨트롤 높이 비율
  * ========================= */
@@ -548,6 +557,19 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+/* 2단계 안내와 줌 컨트롤을 한 줄에 배치하기 위한 레이아웃 */
+.step2-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.step2-info .hint {
+  flex: 1 1 auto;
+  margin: 0;
 }
 
 .step-panel .controls {
