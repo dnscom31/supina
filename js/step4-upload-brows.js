@@ -450,8 +450,7 @@
         off.height = boxH;
         cv.imshow(off, merged);
 
-        // 기존처럼 배경 정리
-        ImageProc.removeBackground(off);
+  
 
         // 최종 눈썹 데이터 저장
         newBrows[side] = { canvas: off, bbox: [0, 0, boxW, boxH] };
