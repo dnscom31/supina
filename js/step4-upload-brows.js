@@ -354,7 +354,7 @@
       var t = temp.getContext('2d');
     
       t.drawImage(canvasEl, minX, minY, boxW, boxH, 0, 0, boxW, boxH);
-      ImageProc.removeBackground(temp);
+     
     
       newBrows[side] = { canvas: temp, bbox: [0, 0, boxW, boxH] };
       autoFitSide(side);
