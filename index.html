@@ -152,9 +152,12 @@
               <div class="confirm-tools">
                 <button id="confirmMask" class="primary" type="button">영역 확정</button>
                 <button id="clearMask" class="ghost" type="button">마스크 지우기</button>
+                <!-- 상세 설정 토글 버튼 -->
+                <button id="toggleDetailSettings" class="ghost" type="button">상세설정</button>
               </div>
               <div id="paintStatus" class="hint"></div>
-              <div class="paint-tools">
+              <!-- 상세 설정 영역: 기본적으로 숨김 처리 -->
+              <div id="detailSettings" class="paint-tools">
                 <label>유동화(블러) <input id="liquifyFeather" type="range" min="0" max="12" step="1" value="4" /></label>
                 <label>채도(%) <input id="liquifySaturation" type="range" min="0" max="200" step="5" value="100" /></label>
                 <label>불투명도(%) <input id="liquifyOpacity" type="range" min="0" max="500" step="5" value="250" /></label>
@@ -235,38 +238,17 @@
             <button id="resetApp" class="primary" type="button" style="position:absolute; top:16px; right:16px;" type="button">초기화</button>
 
             <div class="controls">
-                <fieldset>
-                  <legend>오점 제거(리터치)</legend>
+              <!-- 오점 제거(리터치) 기능 제거: 관련 UI를 삭제하여 더 이상 표시하지 않음 -->
 
-                  <label>
-                    <input id="retouchEnable" type="checkbox" />
-                    보정 기능 사용하기
-                  </label>
-
-                  <label>도구
-                    <select id="retouchTool">
-                      <option value="blur">블러 브러시</option>
-                      <option value="clone">복제(도장)</option>
-                    </select>
-                  </label>
-                  <label>브러시 크기
-                    <input id="retouchSize" type="range" min="8" max="200" step="1" value="40" />
-                  </label>
-                  <label>강도(%)
-                    <input id="retouchStrength" type="range" min="10" max="100" step="5" value="80" />
-                  </label>
-                  <p class="muted">복제 도구: Alt-클릭으로 기준점 지정 후 드래그로 적용</p>
-                </fieldset>
-
-              
-              <div class="defaults-toolbar" style="margin:12px 0; display:flex; gap:8px; flex-wrap:wrap;">
+              <!-- 기본 눈썹 선택 도구: 3x2 그리드 레이아웃으로 재배치 -->
+              <div class="defaults-toolbar">
                 <span class="tag">기본 눈썹 선택:</span>
                 <button id="btnStyleCurved" class="secondary" type="button">curved</button>
                 <button id="btnStyleSoft" class="secondary" type="button">soft arch</button>
                 <button id="btnStyleStandard" class="secondary" type="button">standard</button>
                 <button id="btnStyleStraight" class="secondary" type="button">straight</button>
                 <button id="btnStyleSuitable" class="secondary" type="button">suitable</button>
-                <label style="margin-left:12px;">
+                <label class="hide-uploaded-label">
                   <input type="checkbox" id="hideUploaded" />
                   새로 업로드한 눈썹 숨기기
                 </label>
