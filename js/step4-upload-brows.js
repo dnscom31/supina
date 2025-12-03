@@ -256,8 +256,7 @@
         finalCanvas = temp;
       }
 
-      // 최종 결과에서 배경 제거 (기존 로직 유지)
-      ImageProc.removeBackground(finalCanvas);
+    
 
       // 최종 눈썹 데이터 저장
       newBrows[side] = { canvas: finalCanvas, bbox: [0, 0, boxW, boxH] };
