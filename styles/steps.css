@@ -260,25 +260,26 @@
 
 /* 줌 UI (사진 위 상단 중앙에 배치) */
 .canvas-group .zoom-ui {
-  /* 사진 오른쪽 상단에 고정하여 도구가 미리보기 영역을 가리지 않도록 배치합니다. */
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  left: auto;
-  transform: none;
+  position: absolute;      /* 화면 고정이 아니라, 캔버스 그룹 기준 */
+  top: 8px;                /* 캔버스 안에서 위쪽으로 8px 내려오기 */
+  left: 50%;               /* 가로 중앙 정렬 */
+  transform: translateX(-50%);
   display: flex;
-  gap: 4px;
-  z-index: 5;
+  gap: 6px;
+  z-index: 5;              /* 사진보다 위, 마스크보다 살짝 아래/위 원하는대로 */
   pointer-events: auto;
 }
 
 
 .canvas-group .zoom-ui button {
-  /* 버튼 크기를 줄이고 글씨 크기를 낮춥니다. */
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
   cursor: pointer;
+  /*
+   * 일부 환경에서 배경과 버튼 색상이 비슷해 보여 확대/축소 UI가
+   * 안 보인다는 피드백이 있었습니다. 명확한 대비를 위해 버튼을
+   * 흰색 반투명 배경에 어두운 글자로 설정하고 테두리를 추가합니다.
+   */
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(0, 0, 0, 0.2);
   color: #333;
@@ -430,23 +431,6 @@
   background: #ddd;
 }
 
-/*
- * 기본 눈썹 스타일 버튼들을 3열 2행 그리드로 배치하기 위한 레이아웃.
- * 각 버튼의 크기를 줄여 많은 옵션이 화면에 깔끔하게 표시되도록 합니다.
- */
-.default-buttons-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.default-buttons-grid .secondary {
-  padding: 6px 8px;
-  font-size: 12px;
-  border-radius: 8px;
-}
-
 .tag {
   display: inline-block;
   padding: 2px 6px;
@@ -510,8 +494,7 @@
 .step-panel .preview {
   box-sizing: border-box;
   width: 100%;
-  /* 미리보기 영역을 뷰포트의 25%로 축소하여 화면이 너무 길지 않도록 합니다. */
-  max-height: 25vh;
+  max-height: 30vh; /* 미리보기 영역을 뷰포트의 40%로 제한하여 화면을 더 절약 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -568,10 +551,9 @@
 
   /* 모바일에서 미리보기와 컨트롤 영역의 높이를 적절히 제한하여 한 화면 안에 들어오도록 조정 */
   .step-panel .preview {
-    /* 모바일 화면에서는 조금 더 작게 보여줍니다 */
-    max-height: 18vh;
+    max-height: 20vh;
   }
   .step-panel .controls {
-    max-height: 23vh;
+    max-height: 25vh;
   }
 }
