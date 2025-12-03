@@ -1,299 +1,181 @@
-:root {
-  --bg-start: #faf5ff;
-  --bg-end: #f0f4ff;
-  --primary: #b48df5;
-  --secondary: #f58acb;
-  --text: #2f2e41;
-  --muted: #8c8aa2;
-  --card-bg: rgba(255, 255, 255, 0.8);
-  --border: rgba(0, 0, 0, 0.1);
-  --shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  color: var(--text);
-  background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
-}
-.app-header { padding: 20px 24px; border-bottom: 1px solid var(--border); }
-.app-header h1 { margin: 0; font-size: 24px; color: var(--primary); }
-.app-header .sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
-.app { padding: 16px; display: flex; flex-direction: column; gap: 24px; }
-button.primary { background: var(--primary); color: #fff; padding: 10px 14px; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; display: inline-block; }
-button.primary:hover { background: var(--secondary); }
-.button-group { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-.app-footer { padding: 12px 16px; text-align: center; color: var(--muted); font-size: 12px; }
-.canvas-group { position: relative; width: 100%; max-width: 400px; margin: 0 auto; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.canvas-group canvas { width: 100%; display: block; }
-#faceMaskCanvas, #browMaskCanvasLeft, #browMaskCanvasRight { position: absolute; top: 0; left: 0; pointer-events: auto; }
-.hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
-
-/* 앱 컨테이너는 기본 비표시 (로그인 후 표시) */
-#appContainer { display: none; flex-direction: column; min-height: 100vh; }
-
-/* === Beauty Salon App Theme Overrides (2025-11-13, fixed) === */
+{
+type: "file",
+fileName: "main.css",
+fullContent: `/* 기존 변수 유지 */
 :root {
   --bg-start: #fff1f8;
   --bg-end: #f3e7ff;
   --primary: #f27bb7;
   --secondary: #b48df5;
-  --accent: #ffd5e3;
-  --accent-soft: rgba(244, 140, 193, 0.18);
   --text: #2d2236;
   --muted: #9c7aa9;
   --card-bg: rgba(255, 255, 255, 0.94);
   --border: rgba(255, 255, 255, 0.7);
-  --shadow: 0 18px 40px rgba(203, 110, 176, 0.35);
+  --shadow: 0 10px 30px rgba(203, 110, 176, 0.25);
 }
 
-/* 배경: 미용샵 느낌의 부드러운 그라디언트 */
-body {
-  background:
-    radial-gradient(circle at 0% 0%, rgba(255, 234, 244, 0.95), transparent 55%),
-    radial-gradient(circle at 100% 0%, rgba(235, 222, 255, 0.95), transparent 55%),
-    linear-gradient(180deg, var(--bg-start), var(--bg-end));
-}
+* { box-sizing: border-box; }
 
-/* 앱 전체 컨테이너를 살짝 유리 느낌으로 */
-#appContainer {
-  padding: 12px 12px 24px;
-  backdrop-filter: blur(26px);
-}
-
-/* 상단 헤더: 브랜드 컬러 강조 */
-.app-header {
-  margin: 12px auto 10px;
-  padding: 16px 18px;
-  max-width: 980px;
-  border-radius: 24px;
-  background: linear-gradient(120deg, rgba(242,123,183,0.95), rgba(180,141,245,0.95));
-  box-shadow: 0 16px 45px rgba(172, 73, 138, 0.45);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.5);
-}
-
-/* === 공통 레이아웃: 가로 스크롤 제거 및 기본 여백 제거 === */
-html,
 body {
   margin: 0;
   padding: 0;
-  max-width: 100%;
-  overflow-x: hidden; /* 좌우로 화면이 움직이지 않도록 */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
+  color: var(--text);
+  overflow-x: hidden;
+  /* 모바일에서 당겨서 새로고침 방지 (앱 같은 느낌) */
+  overscroll-behavior-y: none;
 }
 
-/* 헤더 제목 색상을 흰색으로 고정 */
-.app-header h1 {
-  color: #ffffff;
+#appContainer {
+  display: none; /* JS에서 block으로 변경 */
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 10px;
 }
 
-  margin-top: 4px;
-  font-size: 13px;
-  opacity: 0.96;
-  color: rgba(255, 255, 255, 0.96); /* 그라디언트 위에서 잘 보이도록 화이트 계열 */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); /* 밝은 배경에서도 글자가 묻히지 않도록 */
-}
-
-/* 메인 앱 영역: 카드 스타일 */
-.app {
-  max-width: 980px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 16px 6px 24px;
-}
-
-/* 공통 카드 스타일 */
-.card {
-  background: var(--card-bg);
-  border-radius: 24px;
-  border: 1px solid var(--border);
+.app-header {
+  padding: 12px 16px;
+  background: linear-gradient(120deg, var(--primary), var(--secondary));
+  border-radius: 16px;
+  color: white;
+  margin-bottom: 12px;
+  text-align: center;
   box-shadow: var(--shadow);
-  padding: 16px 18px;
+}
+.app-header h1 { margin: 0; font-size: 20px; color:white; }
+.app-header .sub { font-size: 12px; opacity: 0.9; margin-top: 4px; color:white; }
+
+/* 단계 네비게이션은 steps.css에 있지만 기본 스타일 백업 */
+.steps { display:flex; gap:5px; margin-bottom:15px; }
+
+/* 카드 패널 */
+.step-panel {
+  background: var(--card-bg);
+  border-radius: 20px;
+  border: 1px solid white;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  display: none; /* JS로 제어 */
+  margin-bottom: 20px;
+}
+.step-panel.active { display: block; }
+.step-panel h2 { margin-top: 0; font-size: 16px; color: var(--primary); }
+
+/* [중요] 미리보기 영역 크기 제한 및 줌 버튼 표시 */
+.preview {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  /* 미리보기 높이를 뷰포트의 35%로 제한하여 버튼이 잘리지 않게 함 */
+  max-height: 35vh; 
+  overflow: hidden; 
 }
 
-/* 캔버스 그룹을 화장 거울 같은 카드로 */
 .canvas-group {
   position: relative;
   width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  border-radius: 24px;
-  padding: 8px;
-  background:
-    linear-gradient(135deg, rgba(242,123,183,0.9), rgba(180,141,245,0.9));
-  box-shadow: var(--shadow);
+  max-width: 400px; /* 너무 커지지 않게 */
+  border-radius: 16px;
+  overflow: hidden;
+  background: #f0f0f0;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
 }
 
-/* ⚠ 검은 화면 방지: 개별 canvas에는 배경색을 주지 않는다 */
+/* 캔버스 설정: 터치 스크롤 방지 핵심 */
 .canvas-group canvas {
-  width: 100%;
   display: block;
-  border-radius: 18px;
-
-  /*
-   * 모바일 환경에서 손가락으로 드래그해 눈썹 마스크를 그릴 때
-   * 브라우저의 기본 제스처(예: 스크롤, 확대/축소)가 방해하지 않도록
-   * touch-action을 none으로 설정합니다. 이를 통해 페인팅이 부드럽게
-   * 동작하며 두 손가락 확대/축소가 앱 내 줌 기능과 충돌하지 않습니다.
-   */
-  touch-action: none;
-}
-
-/* 기본 버튼 스타일 */
-button,
-button.primary,
-button.ghost {
-  font-family: inherit;
-  border-radius: 999px;
-  padding: 10px 18px;
-  font-size: 15px;
-  border: none;
-  cursor: pointer;
-  transition:
-    transform 0.18s ease-out,
-    box-shadow 0.18s ease-out,
-    background 0.18s ease-out,
-    color 0.18s ease-out;
-}
-
-button.primary {
-  background: linear-gradient(135deg, #f27bb7, #b48df5);
-  color: #fff;
-  box-shadow: 0 10px 28px rgba(203, 110, 176, 0.5);
-}
-button.primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 32px rgba(203, 110, 176, 0.65);
-}
-button.primary:active {
-  transform: translateY(0);
-  box-shadow: 0 6px 18px rgba(203, 110, 176, 0.6);
-}
-
-/* 서브(유령) 버튼 */
-button.ghost {
-  background: rgba(255,255,255,0.86);
-  color: var(--primary);
-  border: 1px solid rgba(242,123,183,0.45);
-  box-shadow: 0 8px 22px rgba(166, 109, 186, 0.25);
-}
-button.ghost:hover {
-  background: rgba(255,255,255,1);
-}
-
-/* 버튼 그룹 간격 조정 */
-.button-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-/* 힌트 텍스트 */
-.hint {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-/* 앱 푸터 */
-.app-footer {
-  text-align: center;
-  padding: 10px 16px 16px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* 모바일에서 여백/폰트 조정 */
-@media (max-width: 768px) {
-  .app-header {
-    padding: 14px 16px;
-    border-radius: 18px;
-  }
-  .app-header h1 {
-    font-size: 20px;
-  }
-  .app {
-    padding-inline: 4px;
-  }
-  button,
-  button.primary,
-  button.ghost {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-/* 모바일(가로 768px 이하) 전용 레이아웃 */
-@media (max-width: 768px) {
-
-  .step-panel {
-    padding: 12px;
-  }
-
-  /* 상단 단계 표시 – 버튼을 가로로 꽉 채우기 */
-  .steps {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 4px;
-  }
-
-  .steps .step {
-    padding: 6px 4px;
-    font-size: 11px;
-  }
-
-  /* 얼굴/눈썹 캔버스는 항상 화면 폭 100% 사용 */
-  #faceCanvas,
-  #faceMaskCanvas,
-  #browCanvasLeft,
-  #browCanvasRight,
-  #resultCanvas {
-    width: 100%;
-    height: auto;
-    max-width: 100%;
-  }
-
-  /* 버튼/슬라이더 영역을 세로 스택 레이아웃으로 */
-  .controls-row {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .controls-row button,
-  .controls-row .primary,
-  .controls-row .secondary {
-    width: 100%;
-    min-height: 40px;
-    font-size: 13px;
-  }
-}
-
-/* 모든 화면용 캔버스를 디바이스 폭에 맞추기 */
-#faceCanvas,
-#faceMaskCanvas,
-#browCanvasLeft,
-#browCanvasRight,
-#browMaskCanvasLeft,
-#browMaskCanvasRight,
-#resultCanvas {
-  display: block;        /* 인라인 요소가 아니도록 */
-  width: 100%;           /* 부모(프리뷰 영역) 폭에 맞춤 */
-  max-width: 100%;       /* 뷰포트 넘어가지 않게 */
-  height: auto;          /* 비율 유지하면서 자동 조정 */
-  margin: 0 auto;        /* 가운데 정렬 */
-}
-
-/* 혹시 다른 캔버스가 생겨도 기본적으로 반응형이 되도록 */
-canvas {
-  max-width: 100%;
+  width: 100%;
   height: auto;
+  touch-action: none; /* [핵심] 캔버스 내부 터치 시 스크롤 차단 */
 }
 
-/* 전체 페이지 가로 스크롤 방지 */
-html, body {
-  margin: 0;
+/* 마스크 캔버스 등은 절대 좌표로 겹침 */
+#faceMaskCanvas, #browMaskCanvasLeft, #browMaskCanvasRight {
+  position: absolute;
+  top: 0; left: 0;
+  z-index: 10;
+}
+
+/* 줌 UI: 무조건 최상위로 */
+.zoom-ui {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 9999; /* 확실하게 위로 */
+  display: flex;
+  flex-direction: column; /* 세로 배치로 변경하여 공간 절약 */
+  gap: 6px;
+}
+.zoom-ui button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.15);
+  color: var(--text);
+  font-weight: bold;
+  font-size: 16px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
   padding: 0;
-  overflow-x: hidden;  /* 화면은 항상 스텝 네비게이션(뷰포트) 폭으로 고정 */
+  display: flex; align-items: center; justify-content: center;
 }
 
+/* 버튼 스타일 */
+button { font-family: inherit; cursor: pointer; border: none; }
+button.primary {
+  background: var(--primary); color: white;
+  padding: 10px 16px; border-radius: 12px;
+  font-size: 14px; width: 100%;
+  transition: transform 0.1s;
+}
+button.secondary {
+  background: #eee; color: var(--text);
+  padding: 8px 12px; border-radius: 8px; font-size: 13px;
+}
+button.ghost {
+  background: transparent; border: 1px solid var(--primary); color: var(--primary);
+  padding: 8px 12px; border-radius: 12px; width: 100%;
+}
+button:active { transform: scale(0.98); }
 
+/* 그리드 버튼 (기본 눈썹 선택) */
+.grid-buttons button {
+  padding: 10px 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  border-radius: 8px;
+}
+
+/* 슬라이더 영역 */
+.adjust-section {
+  background: rgba(255,255,255,0.6);
+  padding: 10px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.adjust-section h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.sliders label { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 4px; }
+.sliders input[type=range] { flex: 1; }
+
+.nudge {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  width: 80px; margin: 0 auto;
+}
+.nudge button { padding: 8px 0; font-size: 14px; background: white; border:1px solid #ddd; }
+.nudge button:nth-child(1) { grid-column: 1; grid-row: 2; }
+.nudge button:nth-child(2) { grid-column: 3; grid-row: 2; }
+.nudge button:nth-child(3) { grid-column: 2; grid-row: 1; }
+.nudge button:nth-child(4) { grid-column: 2; grid-row: 3; }
+
+/* 모바일 대응 */
+@media (max-width: 600px) {
+  .step-panel { padding: 12px; }
+  .side-buttons { display: flex; gap: 8px; }
+  .confirm-tools { display: flex; gap: 8px; margin-top:8px; }
+}
+`
+}
