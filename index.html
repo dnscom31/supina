@@ -1,4 +1,7 @@
-<!doctype html>
+{
+type: "file",
+fileName: "index.html",
+fullContent: `<!doctype html>
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
@@ -11,20 +14,19 @@
     <meta name="theme-color" content="#f27bb7" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <!-- 보안: CSP 및 클릭재킹 방지 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' blob:; frame-ancestors 'none'; media-src 'self' blob:; object-src 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://docs.opencv.org; connect-src 'self' https: blob:; frame-ancestors 'none'; media-src 'self' blob:; object-src 'none'">
 
-    <!-- 분리된 스타일 -->
     <link rel="stylesheet" href="styles/main.css" />
     <link rel="stylesheet" href="styles/auth.css" />
     <link rel="stylesheet" href="styles/admin.css" />
     <link rel="stylesheet" href="styles/steps.css" />
 
-    <!-- OpenCV (옵션: 자동 털 추출 향상용) -->
     <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
   </head>
   <body>
-    <!-- 메인 랜딩 -->
     <div id="mainPage" class="active">
       <h1 class="logo-text">supina</h1>
       <h2 class="tagline">Beauty & Therapy</h2>
@@ -34,7 +36,6 @@
       </div>
     </div>
 
-    <!-- 로그인 페이지 -->
     <div id="loginPage">
       <h1 class="logo-text">supina</h1>
       <h2 class="tagline">Beauty & Therapy</h2>
@@ -47,7 +48,6 @@
       </div>
     </div>
 
-    <!-- 회원가입 페이지 -->
     <div id="signUpPage">
       <h1 class="logo-text">supina</h1>
       <h2 class="tagline">Beauty & Therapy</h2>
@@ -69,7 +69,6 @@
       </div>
     </div>
 
-    <!-- 관리자 페이지 -->
     <div id="adminPage">
       <header class="app-header">
         <h1>관리자 페이지</h1>
@@ -115,7 +114,6 @@
       </main>
     </div>
 
-    <!-- 앱 컨테이너 (로그인 후 표시) -->
     <div id="appContainer">
       <header class="app-header">
         <h1>눈썹 교체</h1>
@@ -139,7 +137,7 @@
 
         <section class="step-panel" data-step="2">
           <h2>2단계: 얼굴에서 눈썹 영역 페인팅</h2>
-          <p class="hint">왼쪽/오른쪽 버튼을 눌러 눈썹 영역을 선택하세요. 캔버스에서 드래그하여 마스크를 그리거나 </p>
+          <p class="hint">왼쪽/오른쪽 버튼을 눌러 눈썹 영역을 선택하세요. 캔버스에서 드래그하여 마스크를 그리거나 '영역 확정'을 눌러 자동 선택을 시도하세요.</p>
           <div class="step2-container">
             <div class="controls">
               
@@ -147,14 +145,19 @@
                 <button id="paintLeft" class="primary" type="button">왼쪽 칠하기</button>
                 <button id="paintRight" class="primary" type="button">오른쪽 칠하기</button>
               </div>
-              <div class="brush-points"><label>브러시 포인트(0~100) 브러시 크기 <input id="brushSize" type="number" min="0" max="100" step="1" value="15" /></label>
+              <div class="brush-points"><label>브러시 크기 <input id="brushSize" type="number" min="1" max="100" step="1" value="15" /></label>
               </div>
+              <div class="paint-tools" style="margin-top:8px;">
+                 <button id="eraserBtn" class="ghost" type="button">지우개 모드로</button>
+              </div>
+
               <div class="confirm-tools">
-                <button id="confirmMask" class="primary" type="button">영역 확정</button>
-                <button id="clearMask" class="ghost" type="button">마스크 지우기</button>
+                <button id="confirmMask" class="primary" type="button">영역 확정 (자동/수동)</button>
+                <button id="clearMask" class="ghost" type="button">마스크 초기화</button>
               </div>
-              <div id="paintStatus" class="hint"></div>
-              <div class="paint-tools">
+              <div id="paintStatus" class="hint" style="min-height:20px; font-weight:bold; color:var(--primary);"></div>
+              
+              <div class="paint-tools" style="border-top:1px solid #eee; padding-top:10px; margin-top:10px;">
                 <label>유동화(블러) <input id="liquifyFeather" type="range" min="0" max="12" step="1" value="4" /></label>
                 <label>채도(%) <input id="liquifySaturation" type="range" min="0" max="200" step="5" value="100" /></label>
                 <label>불투명도(%) <input id="liquifyOpacity" type="range" min="0" max="500" step="5" value="250" /></label>
@@ -165,7 +168,11 @@
                 <div class="static-grid"></div>
                 <canvas id="faceCanvas"></canvas>
                 <canvas id="faceMaskCanvas"></canvas>
-                <div class="zoom-ui"><button id="zoomInStep2" type="button">＋ 확대</button><button id="zoomOutStep2" type="button">－ 축소</button><button id="resetViewStep2" type="button">100%</button></div>
+                <div class="zoom-ui">
+                    <button id="zoomInStep2" type="button">＋</button>
+                    <button id="zoomOutStep2" type="button">－</button>
+                    <button id="resetViewStep2" type="button">1:1</button>
+                </div>
               </div>
             </div>
           </div>
@@ -183,17 +190,16 @@
 
         <section class="step-panel" data-step="4">
           <h2>4단계: 새 눈썹 이미지 업로드</h2>
-          <p class="hint">왼쪽과 오른쪽 눈썹 이미지를 업로드하세요. 이미지를 선택하면 털 부분만 자동으로 추출되고 배경이 제거됩니다. 필요하면 브러시로 더 세밀하게 칠하고 확인을 누르세요.</p>
+          <p class="hint">왼쪽과 오른쪽 눈썹 이미지를 업로드하세요. 필요하면 브러시로 영역을 칠해주세요.</p>
           <div class="brow-section" id="leftBrowSection">
             <h3>왼쪽 눈썹</h3>
             <div class="brow-container">
               <div class="controls">
-              
                 <input id="browInputLeft" type="file" accept="image/*" />
                 <div class="paint-tools">
-                  <label>브러시 크기 <input id="browBrushSizeLeft" type="range" min="2" max="50" step="1" value="15" /></label>
+                  <label>브러시 <input id="browBrushSizeLeft" type="range" min="2" max="50" step="1" value="15" /></label>
                   <button id="clearBrowMaskLeft" class="ghost" type="button">지우기</button>
-                  <button id="confirmBrowMaskLeft" class="primary" type="button">확인</button>
+                  <button id="confirmBrowMaskLeft" class="primary" type="button">영역 확정</button>
                 </div>
               </div>
               <div class="preview">
@@ -209,12 +215,11 @@
             <h3>오른쪽 눈썹</h3>
             <div class="brow-container">
               <div class="controls">
-              
                 <input id="browInputRight" type="file" accept="image/*" />
                 <div class="paint-tools">
-                  <label>브러시 크기 <input id="browBrushSizeRight" type="range" min="2" max="50" step="1" value="15" /></label>
+                  <label>브러시 <input id="browBrushSizeRight" type="range" min="2" max="50" step="1" value="15" /></label>
                   <button id="clearBrowMaskRight" class="ghost" type="button">지우기</button>
-                  <button id="confirmBrowMaskRight" class="primary" type="button">확인</button>
+                  <button id="confirmBrowMaskRight" class="primary" type="button">영역 확정</button>
                 </div>
               </div>
               <div class="preview">
@@ -232,7 +237,7 @@
         <section class="step-panel" data-step="5">
           <h2>5단계: 결과 확인 및 조정</h2>
           <div class="step4-container">
-            <button id="resetApp" class="primary" type="button" style="position:absolute; top:16px; right:16px;" type="button">초기화</button>
+            <button id="resetApp" class="primary" style="position:absolute; top:16px; right:16px; z-index:10;" type="button">초기화</button>
 
             <div class="controls">
                 <fieldset>
@@ -255,39 +260,44 @@
                   <label>강도(%)
                     <input id="retouchStrength" type="range" min="10" max="100" step="5" value="80" />
                   </label>
-                  <p class="muted">복제 도구: Alt-클릭으로 기준점 지정 후 드래그로 적용</p>
+                  <p class="muted">복제 도구: Alt+클릭으로 기준점 지정 후 드래그</p>
                 </fieldset>
 
               
               <div class="defaults-toolbar" style="margin:12px 0; display:flex; gap:8px; flex-wrap:wrap;">
-                <span class="tag">기본 눈썹 선택:</span>
+                <span class="tag">기본 눈썹:</span>
                 <button id="btnStyleCurved" class="secondary" type="button">curved</button>
                 <button id="btnStyleSoft" class="secondary" type="button">soft arch</button>
                 <button id="btnStyleStandard" class="secondary" type="button">standard</button>
                 <button id="btnStyleStraight" class="secondary" type="button">straight</button>
                 <button id="btnStyleSuitable" class="secondary" type="button">suitable</button>
-                <label style="margin-left:12px;">
+                <div style="width:100%; height:1px;"></div>
+                <label style="margin-left:0;">
                   <input type="checkbox" id="hideUploaded" />
-                  새로 업로드한 눈썹 숨기기
+                  업로드한 눈썹 숨기기
+                </label>
+                 <label style="margin-left:12px;">
+                  <input type="checkbox" id="hideDefault" />
+                  기본 눈썹 숨기기
                 </label>
               </div>
-              <p class="hint">왼쪽 패널에서 조정하면 오른쪽 미리보기가 즉시 갱신됩니다.</p>
+              <p class="hint">미리보기 이미지 위에서 우클릭 드래그하여 이동, 휠로 줌 가능합니다.</p>
               <div class="sync-row">
-                <span class="tag">동기화</span>
-                <label><input id="syncTransform" type="checkbox" checked /> 변환(크기·회전·투명도)</label>
-                <label><input id="syncColor" type="checkbox" checked /> 색보정(밝기·대비·채도·선명도)</label>
+                <span class="tag">좌우 동기화</span>
+                <label><input id="syncTransform" type="checkbox" checked /> 변환</label>
+                <label><input id="syncColor" type="checkbox" checked /> 색상</label>
               </div>
               <div class="adjust-section">
                 <h3>왼쪽 눈썹 조정</h3>
                 <div class="sliders">
                   <label>크기 <input id="leftScale" type="range" min="0.2" max="1.8" step="0.01" value="1" /></label>
-                  <label>회전(°) <input id="leftRot" type="range" min="-45" max="45" step="0.1" value="0" /></label>
+                  <label>회전 <input id="leftRot" type="range" min="-45" max="45" step="0.1" value="0" /></label>
                   <label>투명도 <input id="leftAlpha" type="range" min="0" max="1" step="0.01" value="1" /></label>
                   <div class="group-title">색보정</div>
-                  <label>밝기 <small>(-100~100)</small> <input id="leftBright" type="range" min="-100" max="100" step="1" value="0" /></label>
-                  <label>대비 <small>(-100~100)</small> <input id="leftContrast" type="range" min="-100" max="100" step="1" value="0" /></label>
-                  <label>채도 <small>(0~200)</small> <input id="leftSaturation" type="range" min="0" max="200" step="1" value="100" /></label>
-                  <label>선명도(샤픈) <small>(0~1)</small> <input id="leftSharpness" type="range" min="0" max="1" step="0.05" value="0" /></label>
+                  <label>밝기 <input id="leftBright" type="range" min="-100" max="100" step="1" value="0" /></label>
+                  <label>대비 <input id="leftContrast" type="range" min="-100" max="100" step="1" value="0" /></label>
+                  <label>채도 <input id="leftSaturation" type="range" min="0" max="200" step="1" value="100" /></label>
+                  <label>선명도 <input id="leftSharpness" type="range" min="0" max="1" step="0.05" value="0" /></label>
                 </div>
                 <div class="nudge">
                   <button data-nudge="left:-3,0">←</button>
@@ -300,13 +310,13 @@
                 <h3>오른쪽 눈썹 조정</h3>
                 <div class="sliders">
                   <label>크기 <input id="rightScale" type="range" min="0.2" max="1.8" step="0.01" value="1" /></label>
-                  <label>회전(°) <input id="rightRot" type="range" min="-45" max="45" step="0.1" value="0" /></label>
+                  <label>회전 <input id="rightRot" type="range" min="-45" max="45" step="0.1" value="0" /></label>
                   <label>투명도 <input id="rightAlpha" type="range" min="0" max="1" step="0.01" value="1" /></label>
                   <div class="group-title">색보정</div>
-                  <label>밝기 <small>(-100~100)</small> <input id="rightBright" type="range" min="-100" max="100" step="1" value="0" /></label>
-                  <label>대비 <small>(-100~100)</small> <input id="rightContrast" type="range" min="-100" max="100" step="1" value="0" /></label>
-                  <label>채도 <small>(0~200)</small> <input id="rightSaturation" type="range" min="0" max="200" step="1" value="100" /></label>
-                  <label>선명도(샤픈) <small>(0~1)</small> <input id="rightSharpness" type="range" min="0" max="1" step="0.05" value="0" /></label>
+                  <label>밝기 <input id="rightBright" type="range" min="-100" max="100" step="1" value="0" /></label>
+                  <label>대비 <input id="rightContrast" type="range" min="-100" max="100" step="1" value="0" /></label>
+                  <label>채도 <input id="rightSaturation" type="range" min="0" max="200" step="1" value="100" /></label>
+                  <label>선명도 <input id="rightSharpness" type="range" min="0" max="1" step="0.05" value="0" /></label>
                 </div>
                 <div class="nudge">
                   <button data-nudge="right:-3,0">←</button>
@@ -316,7 +326,7 @@
                 </div>
               </div>
               <div class="button-group">
-                <button id="inpaintResult" class="primary" type="button">인페인팅</button>
+                <button id="inpaintResult" class="primary" type="button">인페인팅(반영)</button>
                 <button id="downloadResult" class="primary" type="button">결과 저장(JPG)</button>
               </div>
             </div>
@@ -325,9 +335,9 @@
                 <div class="static-grid"></div>
                 <canvas id="resultCanvas"></canvas>
                 <div class="zoom-ui">
-                  <button id="zoomInStep5" type="button">＋ 확대</button>
-                  <button id="zoomOutStep5" type="button">－ 축소</button>
-                  <button id="resetViewStep5" type="button">100%</button>
+                  <button id="zoomInStep5" type="button">＋</button>
+                  <button id="zoomOutStep5" type="button">－</button>
+                  <button id="resetViewStep5" type="button">1:1</button>
                 </div>
               </div>
             </div>
@@ -340,7 +350,6 @@
       </footer>
     </div>
 
-    <!-- 분리된 스크립트 (로딩 순서 중요) -->
     <script defer src="js/utils.js"></script>
     <script defer src="js/image-processing.js"></script>
     <script defer src="js/default-brows.js"></script>
@@ -355,3 +364,5 @@
     <script defer src="js/security.js"></script>
   </body>
 </html>
+`
+}
