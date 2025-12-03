@@ -138,8 +138,20 @@
         </section>
 
         <section class="step-panel" data-step="2">
-          <h2>2단계: 얼굴에서 눈썹 영역 페인팅</h2>
-          <p class="hint">왼쪽/오른쪽 버튼을 눌러 눈썹 영역을 선택하세요. 캔버스에서 드래그하여 마스크를 그리거나 </p>
+          <!-- 2단계 헤더: 타이틀만 표시하고 줌 컨트롤은 안내 문구 옆으로 이동 -->
+          <div class="step2-header" style="display:flex; align-items:center;">
+            <h2 style="margin:0; flex:1;">2단계: 얼굴에서 눈썹 영역 페인팅</h2>
+          </div>
+          <!-- 안내 문구와 줌 컨트롤을 같은 줄에 배치 -->
+          <div class="step2-info" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <p class="hint" style="margin:0; flex:1;">왼쪽/오른쪽 버튼을 눌러 눈썹 영역을 선택하세요. 캔버스에서 드래그하여 마스크를 그리거나 </p>
+            <!-- 확대/축소 컨트롤: 안내 문구 오른쪽에 배치 -->
+            <div class="zoom-controls">
+              <button id="zoomInStep2" type="button">＋</button>
+              <button id="zoomOutStep2" type="button">－</button>
+              <button id="resetViewStep2" type="button">100%</button>
+            </div>
+          </div>
           <div class="step2-container">
             <div class="controls">
               
@@ -152,9 +164,11 @@
               <div class="confirm-tools">
                 <button id="confirmMask" class="primary" type="button">영역 확정</button>
                 <button id="clearMask" class="ghost" type="button">마스크 지우기</button>
+                <button id="toggleDetailSettings" class="ghost" type="button">상세설정</button>
               </div>
               <div id="paintStatus" class="hint"></div>
-              <div class="paint-tools">
+              <!-- 상세 설정 영역: 기본은 숨김 상태로 처리 -->
+              <div id="detailSettings" class="paint-tools">
                 <!-- 효과 강도 상향을 위해 max 값을 확대합니다. -->
                 <label>유동화(블러) <input id="liquifyFeather" type="range" min="0" max="24" step="1" value="8" /></label>
                 <label>채도(%) <input id="liquifySaturation" type="range" min="0" max="400" step="5" value="150" /></label>
@@ -166,7 +180,7 @@
                 <div class="static-grid"></div>
                 <canvas id="faceCanvas"></canvas>
                 <canvas id="faceMaskCanvas"></canvas>
-                <div class="zoom-ui"><button id="zoomInStep2" type="button">＋ 확대</button><button id="zoomOutStep2" type="button">－ 축소</button><button id="resetViewStep2" type="button">100%</button></div>
+                <!-- 줌 UI는 step2-header 우측으로 이동하였음 -->
               </div>
             </div>
           </div>
