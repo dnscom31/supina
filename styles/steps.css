@@ -238,6 +238,29 @@
   z-index: 1;
 }
 
+/* ==== 2025-12-03 커스텀 수정 ==== */
+/* 2단계 뷰포트 내 캔버스 크기를 확장하여 전체 얼굴을 더 크게 보여줍니다 */
+#step2Viewport canvas {
+  width: 80%;
+}
+
+/* 2단계 뷰포트 오버플로우를 숨기지 않음: 확대/축소 UI가 잘리지 않도록 */
+#step2Viewport {
+  overflow: visible;
+}
+
+/* 2단계 줌 UI를 오른쪽 상단에 고정하고 시야에서 잘리지 않도록 합니다 */
+#step2Viewport .zoom-ui {
+  left: auto;
+  right: 8px;
+  transform: none;
+  z-index: 10;
+}
+#step2Viewport .zoom-ui button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
 /* 마스크(그림 그리는 층)는 사진보다 더 위에 배치 */
 #faceMaskCanvas, 
 #browMaskCanvasLeft, 
@@ -487,6 +510,32 @@
   row-gap: 12px;
 }
 
+/* === 커스텀 오버라이드: 기본 눈썹 선택 영역을 3×2 그리드로 재배치하고 버튼 크기를 줄입니다 === */
+.defaults-toolbar {
+  margin: 12px 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.defaults-toolbar .tag {
+  grid-column: 1 / -1;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.defaults-toolbar button.secondary {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 14px;
+}
+.hide-uploaded-label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
 /* =========================
  * 프리뷰 / 컨트롤 높이 비율
  * ========================= */
@@ -551,7 +600,7 @@
 
   /* 모바일에서 미리보기와 컨트롤 영역의 높이를 적절히 제한하여 한 화면 안에 들어오도록 조정 */
   .step-panel .preview {
-    max-height: 30vh;
+    max-height: 20vh;
   }
   .step-panel .controls {
     max-height: 25vh;
