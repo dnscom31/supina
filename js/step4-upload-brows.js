@@ -57,12 +57,13 @@
       img.src = URL.createObjectURL(file);
     }
 
-        // ✅ 손으로 그린 눈썹에서 "한 올 한 올"을 추출하는 마스크 생성 함수
+   
+    // ✅ 손으로 그린 눈썹에서 "한 올 한 올"을 추출하는 마스크 생성 함수 (개선 버전)
     function buildHairMask(srcMat, w, h){
       // 1) 그레이스케일로 변환
       var gray = new cv.Mat();
       cv.cvtColor(srcMat, gray, cv.COLOR_RGB2GRAY);
-
+    
       // 2) 대비 향상 (히스토그램 평활화)
       var contrast = new cv.Mat();
       if (cv.equalizeHist) {
@@ -70,42 +71,40 @@
       } else {
         gray.copyTo(contrast);
       }
-
+    
       // 3) 노이즈 제거 + 선 유지 (bilateral 이 있으면 우선 사용)
       var smooth = new cv.Mat();
       if (cv.bilateralFilter) {
-        // d=7, sigmaColor/Space는 손으로 그린 선 기준으로 적당한 값
         cv.bilateralFilter(contrast, smooth, 7, 50, 50, cv.BORDER_DEFAULT);
       } else {
         cv.GaussianBlur(contrast, smooth, new cv.Size(3,3), 0, 0, cv.BORDER_DEFAULT);
       }
-
+    
       // 4) 어두운 얇은 선만 강조 (블랙햇 변환)
-      var kernelSize = 9; // 이전 15보다 작게 – 털 굵기 정도만 잡도록
+      var kernelSize = 9;
       var kernel = cv.getStructuringElement(
         cv.MORPH_ELLIPSE,
         new cv.Size(kernelSize, kernelSize)
       );
-
+    
       var blackhat = new cv.Mat();
       cv.morphologyEx(smooth, blackhat, cv.MORPH_BLACKHAT, kernel);
-
+    
       // 5) 이진화 (Otsu)로 기본 털 영역 마스크 생성
       var maskBH = new cv.Mat();
       cv.threshold(blackhat, maskBH, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-
+    
       // 6) Canny 엣지와 교차시켜 한 올씩 살리기
       var finalMask = new cv.Mat();
       if (cv.Canny) {
         var edges = new cv.Mat();
-        cv.Canny(smooth, edges, 30, 80, 3, false); // 얇은 선만 추출
-        cv.bitwise_and(maskBH, edges, finalMask);  // 블랙햇 영역과 교집합
+        cv.Canny(smooth, edges, 30, 80, 3, false);
+        cv.bitwise_and(maskBH, edges, finalMask);
         edges.delete();
       } else {
-        // Canny가 없으면 블랙햇 마스크만 사용
         maskBH.copyTo(finalMask);
       }
-
+    
       // 7) 작은 노이즈 제거 + 선을 살짝 두껍게
       var smallKernel = new cv.getStructuringElement(
         cv.MORPH_ELLIPSE,
@@ -113,7 +112,14 @@
       );
       cv.morphologyEx(finalMask, finalMask, cv.MORPH_OPEN, smallKernel);
       cv.dilate(finalMask, finalMask, smallKernel);
-
+    
+      // ⚠️ 여기서 한 번 더 체크: 마스크가 모두 0이면, 블랙햇 이진 마스크로 fallback
+      var nonZero = cv.countNonZero(finalMask);
+      if (nonZero === 0) {
+        finalMask.delete();
+        finalMask = maskBH.clone();   // 최소한 눈썹 덩어리 수준으로라도 사용
+      }
+    
       // 메모리 정리
       gray.delete();
       contrast.delete();
@@ -122,8 +128,8 @@
       blackhat.delete();
       maskBH.delete();
       smallKernel.delete();
-
-      return finalMask; // CV_8UC1 마스크 (한 올 한 올이 살아 있음)
+    
+      return finalMask; // CV_8UC1 마스크
     }
 
 
@@ -296,20 +302,20 @@
       nudgeOffsets[side].x = 0;
       nudgeOffsets[side].y = 0;
     }
-
+    
     function autoCropBrow(side){
       var canvasEl = (side === 'left' ? browCanvasLeft : browCanvasRight);
       var ctx      = (side === 'left' ? browCtxLeft    : browCtxRight);
       var w = canvasEl.width,
           h = canvasEl.height;
-
+    
       if (!w || !h) return;
-
+    
       var imgData = ctx.getImageData(0, 0, w, h);
       var data    = imgData.data;
-
+    
       var minX = w, minY = h, maxX = 0, maxY = 0, found = false;
-
+    
       for (var y = 0; y < h; y++) {
         for (var x = 0; x < w; x++) {
           var idx = (y * w + x) * 4;
@@ -317,9 +323,11 @@
               g = data[idx+1],
               b = data[idx+2],
               a = data[idx+3];
-
+    
           var br = (r + g + b) / 3;
-          if (a > 50 && br < 240) {
+    
+          // ✅ 조건 완화: 알파/밝기 기준을 느슨하게 해서 밝은 사진도 인식
+          if (a > 20 && br < 252) {
             found = true;
             if (x < minX) minX = x;
             if (y < minY) minY = y;
@@ -328,24 +336,31 @@
           }
         }
       }
-
-      if (!found) return;
-
+    
+      // ✅ 여전히 픽셀을 못 찾으면, 전체 이미지를 fallback으로 사용
+      if (!found) {
+        minX = 0;
+        minY = 0;
+        maxX = w - 1;
+        maxY = h - 1;
+      }
+    
       var boxW = maxX - minX + 1,
           boxH = maxY - minY + 1;
-
+    
       var temp = document.createElement('canvas');
       temp.width  = boxW;
       temp.height = boxH;
       var t = temp.getContext('2d');
-
+    
       t.drawImage(canvasEl, minX, minY, boxW, boxH, 0, 0, boxW, boxH);
       ImageProc.removeBackground(temp);
-
+    
       newBrows[side] = { canvas: temp, bbox: [0, 0, boxW, boxH] };
       autoFitSide(side);
       updateStep3Navigation();
     }
+
 
         async function processBrowImage(side){
       try {
