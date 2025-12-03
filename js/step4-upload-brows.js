@@ -29,17 +29,27 @@
         ctx.clearRect(0, 0, w, h);
         ctx.drawImage(img, 0, 0, w, h);
         maskCtxEl.clearRect(0, 0, w, h);
-
-        // 업로드한 캔버스가 flex 컨테이너 내에서 높이 0으로 렌더링되어 보이지 않는 문제가 있어
-        // display와 CSS width/height를 명시적으로 지정합니다. width/height 속성은 픽셀 해상도이며,
-        // 스타일 속성은 실제 렌더링 크기를 결정합니다.
+        
+        // ✅ [수정된 부분] 캔버스가 겹쳐서 보이도록 스타일 강제 조정
+        
+        // 1) 부모 컨테이너를 relative로 설정 (자식들의 absolute 위치 기준점)
+        if (canvas.parentElement) {
+          canvas.parentElement.style.position = 'relative';
+        }
+        
+        // 2) 이미지 캔버스 (Background): 문서 흐름에 따라 높이를 차지하도록 설정
         canvas.style.display = 'block';
-        maskCanvasEl.style.display = 'block';
         canvas.style.width  = '100%';
-        canvas.style.height = 'auto';
+        canvas.style.height = 'auto'; // 이미지 비율에 맞춰 높이 자동 설정
+        
+        // 3) 마스크 캔버스 (Foreground): 이미지 바로 위에 겹치도록 절대 위치 설정
+        maskCanvasEl.style.position = 'absolute'; // 겹치기 필수 속성
+        maskCanvasEl.style.top = '0';
+        maskCanvasEl.style.left = '0';
+        maskCanvasEl.style.display = 'block';
         maskCanvasEl.style.width  = '100%';
-        maskCanvasEl.style.height = 'auto';
-
+        maskCanvasEl.style.height = '100%'; // 밑에 있는 이미지 캔버스의 크기에 딱 맞춤
+        
         browImages[side] = img;
         newBrows[side] = null;
         processBrowImage(side);
