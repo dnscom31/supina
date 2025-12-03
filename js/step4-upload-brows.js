@@ -30,9 +30,15 @@
         ctx.drawImage(img, 0, 0, w, h);
         maskCtxEl.clearRect(0, 0, w, h);
 
-        // 업로드된 눈썹이 즉시 보이도록 캔버스를 표시합니다
-        canvas.style.display = '';
-        maskCanvasEl.style.display = '';
+        // 업로드한 캔버스가 flex 컨테이너 내에서 높이 0으로 렌더링되어 보이지 않는 문제가 있어
+        // display와 CSS width/height를 명시적으로 지정합니다. width/height 속성은 픽셀 해상도이며,
+        // 스타일 속성은 실제 렌더링 크기를 결정합니다.
+        canvas.style.display = 'block';
+        maskCanvasEl.style.display = 'block';
+        canvas.style.width  = '100%';
+        canvas.style.height = 'auto';
+        maskCanvasEl.style.width  = '100%';
+        maskCanvasEl.style.height = 'auto';
 
         browImages[side] = img;
         newBrows[side] = null;
