@@ -5,7 +5,8 @@
     function handleBrowUpload(side, file){
       var img = new Image();
       img.onload = function(){
-        var maxSide = 400;
+      // 눈썹 이미지를 더 크게 표시하기 위해 최대 크기를 확장합니다.
+      var maxSide = 600;
         var scale = Math.min(1, maxSide/Math.max(img.width, img.height));
         var w = Math.round(img.width*scale),
             h = Math.round(img.height*scale);
