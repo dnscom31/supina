@@ -266,14 +266,27 @@
   display: flex;
   gap: 6px;
   z-index: 5;
+
+  /*
+   * 터치 기반 기기에서 확대/축소 버튼이 클릭되지 않는 문제가 있어
+   * 포인터 이벤트를 활성화합니다. 기본값은 auto지만 상위 요소에서
+   * 포인터 이벤트가 none으로 설정된 경우에도 동작하도록 명시합니다.
+   */
+  pointer-events: auto;
 }
 
 .canvas-group .zoom-ui button {
   padding: 6px 10px;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
   border-radius: 8px;
   cursor: pointer;
+  /*
+   * 일부 환경에서 배경과 버튼 색상이 비슷해 보여 확대/축소 UI가
+   * 안 보인다는 피드백이 있었습니다. 명확한 대비를 위해 버튼을
+   * 흰색 반투명 배경에 어두운 글자로 설정하고 테두리를 추가합니다.
+   */
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: #333;
 }
 
 /* =========================
