@@ -618,5 +618,20 @@
       renderStep2();
       console.log('=== 영역 확정 완료 ===');
     });
+
+    // 상세 설정 토글: paint-tools 영역을 숨기거나 표시합니다.
+    var detailBtn = document.getElementById('toggleDetailSettings');
+    var detailSection = document.getElementById('detailSettings');
+    if (detailBtn && detailSection) {
+      // 초기에는 숨김
+      detailSection.style.display = 'none';
+      detailBtn.addEventListener('click', function(){
+        if (detailSection.style.display === 'none') {
+          detailSection.style.display = 'flex';
+        } else {
+          detailSection.style.display = 'none';
+        }
+      });
+    }
   });
 })();
