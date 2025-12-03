@@ -555,9 +555,9 @@
 
   /* 모바일에서 미리보기와 컨트롤 영역의 높이를 적절히 제한하여 한 화면 안에 들어오도록 조정 */
   .step-panel .preview {
-    max-height: 45vh;
+    max-height: 35vh;
   }
   .step-panel .controls {
-    max-height: 35vh;
+    max-height: 25vh;
   }
 }
