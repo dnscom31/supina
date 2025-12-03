@@ -229,7 +229,7 @@
 
 /* [중요 수정] 캔버스 표시 설정 */
 .canvas-group canvas {
-  width: 100%;
+  width: 80%;
   display: block;
   border-radius: 18px;
   
