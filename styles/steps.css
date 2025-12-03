@@ -498,7 +498,7 @@
 .step-panel .preview {
   box-sizing: border-box;
   width: 100%;
-  max-height: 40vh; /* 미리보기 영역을 뷰포트의 40%로 제한하여 화면을 더 절약 */
+  max-height: 30vh; /* 미리보기 영역을 뷰포트의 40%로 제한하여 화면을 더 절약 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -508,7 +508,7 @@
 .step-panel .controls {
   box-sizing: border-box;
   width: 100%;
-  max-height: 30vh; /* 유틸 영역을 뷰포트의 30%로 축소 */
+  max-height: 20vh; /* 유틸 영역을 뷰포트의 30%로 축소 */
   overflow-y: auto;
 }
 
