@@ -619,11 +619,10 @@
       console.log('=== 영역 확정 완료 ===');
     });
 
-    // 상세 설정 토글: paint-tools 영역을 숨기거나 표시합니다.
+    // 상세 설정 토글 기능을 추가합니다. 상세 설정 영역은 기본적으로 숨김 상태입니다.
     var detailBtn = document.getElementById('toggleDetailSettings');
     var detailSection = document.getElementById('detailSettings');
     if (detailBtn && detailSection) {
-      // 초기에는 숨김
       detailSection.style.display = 'none';
       detailBtn.addEventListener('click', function(){
         if (detailSection.style.display === 'none') {
@@ -633,5 +632,106 @@
         }
       });
     }
+
+    // 얼굴 자동 보정 및 특징 추출 함수
+    var faceProcessed = false;
+    function autoEnhanceFace() {
+      if (faceProcessed) return;
+      if (!faceImage || !faceImage.width || !faceImage.height) return;
+      try {
+        var w = faceImage.width;
+        var h = faceImage.height;
+        var off = document.createElement('canvas');
+        off.width = w;
+        off.height = h;
+        var ctx = off.getContext('2d');
+        ctx.drawImage(faceImage, 0, 0);
+        var imgData = ctx.getImageData(0, 0, w, h);
+        var data = imgData.data;
+        var rSum = 0, gSum = 0, bSum = 0, count = 0;
+        // 중앙 영역을 샘플링하여 피부 톤을 추정합니다.
+        var xStart = Math.floor(w * 0.25), xEnd = Math.floor(w * 0.75);
+        var yStart = Math.floor(h * 0.3), yEnd = Math.floor(h * 0.8);
+        for (var y = yStart; y < yEnd; y += 2) {
+          for (var x = xStart; x < xEnd; x += 2) {
+            var idx = (y * w + x) * 4;
+            var r = data[idx];
+            var g = data[idx + 1];
+            var b = data[idx + 2];
+            // 밝은 영역과 너무 어두운 영역은 제외
+            var l = (r + g + b) / 3;
+            if (l > 30 && l < 230) {
+              rSum += r;
+              gSum += g;
+              bSum += b;
+              count++;
+            }
+          }
+        }
+        if (count > 0) {
+          var avgR = rSum / count;
+          var avgG = gSum / count;
+          var avgB = bSum / count;
+          // 피부 평균 밝기를 기반으로 목표 밝기/대조를 설정 (밝기 180, 대비 1.1)
+          var targetL = 180;
+          var curL = (avgR + avgG + avgB) / 3;
+          var brightFactor = targetL / curL;
+          var contrast = 1.1;
+          // 각 픽셀에 적용
+          for (var i = 0; i < data.length; i += 4) {
+            var r = data[i], g = data[i+1], b = data[i+2];
+            // 밝기 조정
+            r = r * brightFactor;
+            g = g * brightFactor;
+            b = b * brightFactor;
+            // 대비 조정
+            r = ((r - 128) * contrast) + 128;
+            g = ((g - 128) * contrast) + 128;
+            b = ((b - 128) * contrast) + 128;
+            // 채도 약간 증가
+            var avg = (r + g + b) / 3;
+            r = avg + (r - avg) * 1.1;
+            g = avg + (g - avg) * 1.05;
+          	
+            b = avg + (b - avg) * 1.05;
+            // 클램프
+            data[i] = Math.max(0, Math.min(255, r));
+            data[i+1] = Math.max(0, Math.min(255, g));
+            data[i+2] = Math.max(0, Math.min(255, b));
+          }
+          ctx.putImageData(imgData, 0, 0);
+          // 새로운 이미지로 faceImage를 대체
+          var imgUrl = off.toDataURL();
+          var newImg = new Image();
+          newImg.onload = function(){
+            faceImage = newImg;
+            faceProcessed = true;
+            // 피부 톤 및 특징 정보 전역 저장
+            window.skinColorInfo = { r: avgR, g: avgG, b: avgB };
+            // 간단한 특징 추정: 얼굴 비율로 대략적인 영역 계산
+            window.faceFeatures = {
+              eyes:  { x: w * 0.2, y: h * 0.25, w: w * 0.6, h: h * 0.15 },
+              nose:  { x: w * 0.35, y: h * 0.45, w: w * 0.3, h: h * 0.2 },
+              mouth: { x: w * 0.3, y: h * 0.7, w: w * 0.4, h: h * 0.15 }
+            };
+            // 보정된 이미지를 faceBaseCanvas에 적용
+            if (typeof faceBaseCanvas !== 'undefined' && faceBaseCanvas) {
+              faceBaseCanvas.width = newImg.width;
+              faceBaseCanvas.height = newImg.height;
+              var bctx = faceBaseCanvas.getContext('2d');
+              bctx.clearRect(0, 0, newImg.width, newImg.height);
+              bctx.drawImage(newImg, 0, 0);
+            }
+            renderStep2();
+          };
+          newImg.src = imgUrl;
+        }
+      } catch (e) {
+        console.warn('autoEnhanceFace 오류', e);
+      }
+    }
+
+    // 얼굴 이미지가 준비된 경우 자동 보정을 시도합니다.
+    setTimeout(function(){ autoEnhanceFace(); }, 500);
   });
 })();
