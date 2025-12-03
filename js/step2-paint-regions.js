@@ -323,13 +323,13 @@
     faceBaseCtx.clearRect(0,0,faceW,faceH);
     faceBaseCtx.drawImage(faceBaseOriginalCanvas, 0, 0);
 
-    var feather = liquifyFeather? parseInt(liquifyFeather.value) : 0;
-    var sat = liquifySaturation? parseInt(liquifySaturation.value) : 100;
-    var raw = liquifyOpacity? parseInt(liquifyOpacity.value) : 500;
-    raw = Math.max(0, Math.min(500, raw));
+    var feather = liquifyFeather ? parseInt(liquifyFeather.value) : 0;
+    var sat = liquifySaturation ? parseInt(liquifySaturation.value) : 100;
+    var raw = liquifyOpacity ? parseInt(liquifyOpacity.value) : 500;
+    // 불투명도 범위를 0~1000으로 확장하고 매핑을 넓혀 더 강한 커버 효과를 얻습니다.
+    raw = Math.max(0, Math.min(1000, raw));
 
-    // 선형 스케일로 변경: 더 강력한 효과
-    // 0~500 범위를 0~1로 매핑하되, 최대값에서 완전 불투명
+    // 0~1000 범위를 0~2로 매핑하여 최대 200% 오버레이 효과를 줄 수 있도록 설정
     var opa = raw / 500;
 
     ['left','right'].forEach(function(side){
@@ -343,9 +343,11 @@
       patch.height=boxH;
       var pctx=patch.getContext('2d');
 
-      var filterParts=[];
-      if (feather>0) filterParts.push('blur('+feather+'px)');
-      filterParts.push('saturate('+(sat/100)+')');
+      var filterParts = [];
+      // 블러 값을 1.5배로 증폭하여 기존 눈썹 라인이 거의 보이지 않을 정도로 흐리게 처리합니다.
+      if (feather > 0) filterParts.push('blur(' + (feather * 1.5) + 'px)');
+      // 채도는 범위가 커지도록 100으로 나누어 0~4 범위의 배율을 갖습니다.
+      filterParts.push('saturate(' + (sat / 100) + ')');
       pctx.filter = filterParts.join(' ');
 
       pctx.drawImage(faceBaseOriginalCanvas, minX, minY, boxW, boxH, 0, 0, boxW, boxH);
@@ -672,11 +674,13 @@
           var avgR = rSum / count;
           var avgG = gSum / count;
           var avgB = bSum / count;
-          // 피부 평균 밝기를 기반으로 목표 밝기/대조를 설정 (밝기 180, 대비 1.1)
-          var targetL = 180;
+          // 피부 평균 밝기를 기반으로 목표 밝기/대조를 설정 (밝기 200, 대비 1.2) - 더욱 화사하게
+          // 목표 밝기를 더 높여 더욱 화사하게 개선합니다. 대비 또한 높여 보다 선명하게 합니다.
+          var targetL = 220;
           var curL = (avgR + avgG + avgB) / 3;
           var brightFactor = targetL / curL;
-          var contrast = 1.1;
+          // 대비 계수를 증가시켜 전체적으로 더 맑고 또렷하게 만듭니다.
+          var contrast = 1.3;
           // 각 픽셀에 적용
           for (var i = 0; i < data.length; i += 4) {
             var r = data[i], g = data[i+1], b = data[i+2];
@@ -688,12 +692,12 @@
             r = ((r - 128) * contrast) + 128;
             g = ((g - 128) * contrast) + 128;
             b = ((b - 128) * contrast) + 128;
-            // 채도 약간 증가
+            // 채도 증가 (더 화사하게) - 각 채널에 높은 비율 적용
             var avg = (r + g + b) / 3;
-            r = avg + (r - avg) * 1.1;
-            g = avg + (g - avg) * 1.05;
-          	
-            b = avg + (b - avg) * 1.05;
+            // 붉은 채널을 중심으로 살짝 더 높게, 녹색과 파란색은 균형을 유지하면서 1.2~1.25배 향상
+            r = avg + (r - avg) * 1.4;
+            g = avg + (g - avg) * 1.2;
+            b = avg + (b - avg) * 1.2;
             // 클램프
             data[i] = Math.max(0, Math.min(255, r));
             data[i+1] = Math.max(0, Math.min(255, g));
@@ -722,6 +726,10 @@
               bctx.clearRect(0, 0, newImg.width, newImg.height);
               bctx.drawImage(newImg, 0, 0);
             }
+            // 보정이 끝난 후 줌/이동 값을 초기화하여 드래그 영역과 실제 보정 영역이 일치하도록 합니다.
+            zoom = 1.0;
+            panX = 0;
+            panY = 0;
             renderStep2();
           };
           newImg.src = imgUrl;
